@@ -410,6 +410,9 @@ static struct nfs_client *nfs_match_client(const struct nfs_client_initdata *dat
 
 	list_for_each_entry(clp, &nn->nfs_client_list, cl_share_link) {
 	        const struct sockaddr *clap = (struct sockaddr *)&clp->cl_addr;
+		const struct sockaddr *sa;
+		sa = (const struct sockaddr *)&clp->srcaddr;
+
 		/* Don't match clients that failed to initialise properly */
 		if (clp->cl_cons_state < 0)
 			continue;
@@ -425,6 +428,13 @@ static struct nfs_client *nfs_match_client(const struct nfs_client_initdata *dat
 			continue;
 		/* Match the full socket address */
 		if (!nfs_sockaddr_cmp(sap, clap))
+			continue;
+
+		/* Check to make sure local-IP bindings match,
+		 * but just the IP-addr.
+		 */
+		if (data->srcaddr &&
+		    !nfs_sockaddr_match_ipaddr(data->srcaddr, sa))
 			continue;
 
 		atomic_inc(&clp->cl_count);

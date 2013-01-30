@@ -68,7 +68,9 @@ struct nfs_client_initdata {
 	unsigned long init_flags;
 	const char *hostname;
 	const struct sockaddr *addr;
+	const struct sockaddr *srcaddr;
 	size_t addrlen;
+	size_t srcaddrlen;
 	struct nfs_subversion *nfs_mod;
 	int proto;
 	u32 minorversion;
