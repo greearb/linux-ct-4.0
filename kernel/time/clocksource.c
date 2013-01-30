@@ -103,6 +103,7 @@ static LIST_HEAD(clocksource_list);
 static DEFINE_MUTEX(clocksource_mutex);
 static char override_name[CS_NAME_LEN];
 static int finished_booting;
+static int force_tsc_stable;
 
 #ifdef CONFIG_CLOCKSOURCE_WATCHDOG
 static void clocksource_watchdog_work(struct work_struct *work);
@@ -125,6 +126,13 @@ static void __clocksource_change_rating(struct clocksource *cs, int rating);
 #define WATCHDOG_INTERVAL (HZ >> 1)
 #define WATCHDOG_THRESHOLD (NSEC_PER_SEC >> 4)
 
+static int __init parse_force_tsc_stable(char *arg)
+{
+	force_tsc_stable = 1;
+	return 0;
+}
+early_param("force_tsc_stable", parse_force_tsc_stable);
+
 static void clocksource_watchdog_work(struct work_struct *work)
 {
 	/*
@@ -144,6 +152,17 @@ static void __clocksource_unstable(struct clocksource *cs)
 
 static void clocksource_unstable(struct clocksource *cs, int64_t delta)
 {
+	if (force_tsc_stable && (strcmp(cs->name, "tsc") == 0)) {
+		static int do_once = 1;
+		if (do_once) {
+			printk(KERN_WARNING "Clocksource %s unstable (delta = %Ld ns)\n",
+			       cs->name, delta);
+			printk(KERN_WARNING "Forcing tsc to be treated as stable due to force_tsc_stable=1\n");
+			do_once = 0;
+		}
+		return;
+	}
+
 	printk(KERN_WARNING "Clocksource %s unstable (delta = %Ld ns)\n",
 	       cs->name, delta);
 	__clocksource_unstable(cs);

@@ -71,6 +71,7 @@ int acpi_sci_override_gsi __initdata;
 int acpi_skip_timer_override __initdata;
 int acpi_use_timer_override __initdata;
 int acpi_fix_pin2_polarity __initdata;
+int force_smp_found_cfg __initdata;
 
 #ifdef CONFIG_X86_LOCAL_APIC
 static u64 acpi_lapic_addr __initdata = APIC_DEFAULT_PHYS_BASE;
@@ -1231,6 +1232,14 @@ static void __init early_acpi_process_madt(void)
 #endif
 }
 
+static int __init parse_force_smp_found_cfg(char *arg)
+{
+	force_smp_found_cfg = 1;
+	return 0;
+}
+early_param("force_smp_found_cfg", parse_force_smp_found_cfg);
+
+
 static void __init acpi_process_madt(void)
 {
 #ifdef CONFIG_X86_LOCAL_APIC
@@ -1272,9 +1281,14 @@ static void __init acpi_process_madt(void)
  		 * Boot with "acpi=off" to use MPS on such a system.
  		 */
 		if (smp_found_config) {
-			printk(KERN_WARNING PREFIX
-				"No APIC-table, disabling MPS\n");
-			smp_found_config = 0;
+			if (force_smp_found_cfg)
+				printk(KERN_WARNING PREFIX
+				       "No APIC-table, wanted to disable MPS, but will not\n  due to force_smp_found_cfg=1\n");
+			else {
+				printk(KERN_WARNING PREFIX
+				       "No APIC-table, disabling MPS.  Use force_smp_found_cfg=1 to override\n");
+				smp_found_config = 0;
+			}
 		}
 	}
 
