@@ -2567,9 +2567,9 @@ static struct rpc_xprt *xs_setup_xprt(struct xprt_create *args,
 	new = container_of(xprt, struct sock_xprt, xprt);
 	memcpy(&xprt->addr, args->dstaddr, args->addrlen);
 	xprt->addrlen = args->addrlen;
-	if (args->srcaddr)
+	if (args->srcaddr && (args->srcaddr->sa_family != AF_UNSPEC)) {
 		memcpy(&new->srcaddr, args->srcaddr, args->addrlen);
-	else {
+	} else {
 		int err;
 		err = xs_init_anyaddr(args->dstaddr->sa_family,
 					(struct sockaddr *)&new->srcaddr);
