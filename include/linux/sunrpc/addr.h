@@ -125,6 +125,8 @@ static inline bool rpc_cmp_addr(const struct sockaddr *sap1,
 			return __rpc_cmp_addr4(sap1, sap2);
 		case AF_INET6:
 			return __rpc_cmp_addr6(sap1, sap2);
+		case AF_UNSPEC:
+			return true;
 		}
 	}
 	return false;
