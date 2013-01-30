@@ -107,7 +107,7 @@ enum {
 	/* Mount options that take string arguments */
 	Opt_nfsvers,
 	Opt_sec, Opt_proto, Opt_mountproto, Opt_mounthost,
-	Opt_addr, Opt_mountaddr, Opt_clientaddr,
+	Opt_addr, Opt_mountaddr, Opt_clientaddr, Opt_srcaddr,
 	Opt_lookupcache,
 	Opt_fscache_uniq,
 	Opt_local_lock,
@@ -177,6 +177,7 @@ static const match_table_t nfs_mount_option_tokens = {
 	{ Opt_mountproto, "mountproto=%s" },
 	{ Opt_addr, "addr=%s" },
 	{ Opt_clientaddr, "clientaddr=%s" },
+	{ Opt_srcaddr, "srcaddr=%s" },
 	{ Opt_mounthost, "mounthost=%s" },
 	{ Opt_mountaddr, "mountaddr=%s" },
 
@@ -686,6 +687,15 @@ static void nfs_show_mount_options(struct seq_file *m, struct nfs_server *nfss,
 		nfs_show_mountd_options(m, nfss, showdefaults);
 	else
 		nfs_show_nfsv4_options(m, nfss, showdefaults);
+
+	if (clp->srcaddr.ss_family == AF_INET6) {
+		struct sockaddr_in6 *sin6;
+		sin6 = (struct sockaddr_in6 *)(&clp->srcaddr);
+		seq_printf(m, ",srcaddr=%pI6c", &sin6->sin6_addr);
+	} else if (clp->srcaddr.ss_family == AF_INET) {
+		struct sockaddr_in *sin = (struct sockaddr_in *)&clp->srcaddr;
+		seq_printf(m, ",srcaddr=%pI4", &sin->sin_addr.s_addr);
+	}
 
 	if (nfss->options & NFS_OPTION_FSCACHE)
 		seq_printf(m, ",fsc");
@@ -1560,6 +1570,23 @@ static int nfs_parse_mount_options(char *raw,
 			if (nfs_get_option_str(args, &mnt->fscache_uniq))
 				goto out_nomem;
 			mnt->options |= NFS_OPTION_FSCACHE;
+			break;
+		case Opt_srcaddr:
+			string = match_strdup(args);
+			if (string == NULL)
+				goto out_nomem;
+			mnt->srcaddr.addrlen =
+				rpc_pton(mnt->net, string, strlen(string),
+					 (struct sockaddr *)
+					 &mnt->srcaddr.address,
+					 sizeof(mnt->srcaddr.address));
+			kfree(string);
+			if (mnt->srcaddr.addrlen == 0) {
+				printk(KERN_WARNING
+				       "nfs: Could not parse srcaddr: %s\n",
+				       string);
+				goto out_invalid_address;
+			}
 			break;
 		case Opt_local_lock:
 			string = match_strdup(args);
