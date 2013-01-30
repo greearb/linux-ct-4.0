@@ -322,6 +322,7 @@ static inline struct sockaddr *svc_daddr(const struct svc_rqst *rqst)
 	return (struct sockaddr *) &rqst->rq_daddr;
 }
 
+
 /*
  * Check buffer bounds after decoding arguments
  */

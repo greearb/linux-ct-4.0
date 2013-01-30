@@ -199,6 +199,7 @@ static __be32 decode_getattr_args(struct svc_rqst *rqstp, struct xdr_stream *xdr
 	if (unlikely(status != 0))
 		goto out;
 	args->addr = svc_addr(rqstp);
+	args->srcaddr = svc_daddr(rqstp);
 	status = decode_bitmap(xdr, args->bitmap);
 out:
 	dprintk("%s: exit with status = %d\n", __func__, ntohl(status));
@@ -211,6 +212,7 @@ static __be32 decode_recall_args(struct svc_rqst *rqstp, struct xdr_stream *xdr,
 	__be32 status;
 
 	args->addr = svc_addr(rqstp);
+	args->srcaddr = svc_daddr(rqstp);
 	status = decode_stateid(xdr, &args->stateid);
 	if (unlikely(status != 0))
 		goto out;
@@ -449,6 +451,7 @@ static __be32 decode_cb_sequence_args(struct svc_rqst *rqstp,
 		goto out;
 
 	args->csa_addr = svc_addr(rqstp);
+	args->csa_daddr = svc_daddr(rqstp);
 	args->csa_sequenceid = ntohl(*p++);
 	args->csa_slotid = ntohl(*p++);
 	args->csa_highestslotid = ntohl(*p++);
