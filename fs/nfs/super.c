@@ -1719,6 +1719,8 @@ static int nfs_request_mount(struct nfs_parsed_mount_data *args,
 	struct nfs_mount_request request = {
 		.sap		= (struct sockaddr *)
 						&args->mount_server.address,
+		.salen		= args->mount_server.addrlen,
+		.srcaddr	= (struct sockaddr *)&args->srcaddr.address,
 		.dirpath	= args->nfs_server.export_path,
 		.protocol	= args->mount_server.protocol,
 		.fh		= root_fh,
