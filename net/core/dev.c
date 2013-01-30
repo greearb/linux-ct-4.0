@@ -6550,7 +6550,7 @@ static void netdev_wait_allrefs(struct net_device *dev)
 			rebroadcast_time = jiffies;
 		}
 
-		msleep(250);
+		schedule_timeout_uninterruptible(1);
 
 		refcnt = netdev_refcnt_read(dev);
 
