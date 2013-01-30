@@ -355,14 +355,16 @@ out:
 	return result;
 }
 
-static struct rpc_clnt *rpcb_create(struct net *net, const char *nodename,
+static struct rpc_clnt *rpcb_create(struct net *net, const char* nodename,
 				    const char *hostname,
-				    struct sockaddr *srvaddr, size_t salen,
-				    int proto, u32 version)
+				    struct sockaddr *srvaddr,
+				    size_t salen, int proto, u32 version,
+				    struct sockaddr *srcaddr)
 {
 	struct rpc_create_args args = {
 		.net		= net,
 		.protocol	= proto,
+		.saddress	= srcaddr,
 		.address	= srvaddr,
 		.addrsize	= salen,
 		.servername	= hostname,
@@ -679,15 +681,37 @@ void rpcb_getport_async(struct rpc_task *task)
 	struct rpc_task	*child;
 	struct sockaddr_storage addr;
 	struct sockaddr *sap = (struct sockaddr *)&addr;
+	struct sockaddr_storage srcaddr;
+	struct sockaddr *srcaddra = NULL;
 	size_t salen;
 	int status;
+	struct sock_xprt *sxprt;
 
 	rcu_read_lock();
 	do {
 		clnt = rpcb_find_transport_owner(task->tk_client);
 		xprt = xprt_get(rcu_dereference(clnt->cl_xprt));
 	} while (xprt == NULL);
+
+	sxprt = container_of(xprt, struct sock_xprt, xprt);
 	rcu_read_unlock();
+
+	/* We just want to bind to the IP, not the port */
+	memset(&srcaddr, 0, sizeof(srcaddr));
+	srcaddr.ss_family = sxprt->srcaddr.ss_family;
+	if (sxprt->srcaddr.ss_family == AF_INET) {
+		struct sockaddr_in *si = (struct sockaddr_in *)(&srcaddr);
+		struct sockaddr_in *si2;
+		si2 = (struct sockaddr_in *)(&sxprt->srcaddr);
+		si->sin_addr.s_addr = si2->sin_addr.s_addr;
+		srcaddra = (struct sockaddr *)(&srcaddr);
+	} else if (sxprt->srcaddr.ss_family == AF_INET6) {
+		struct sockaddr_in6 *si = (struct sockaddr_in6 *)(&srcaddr);
+		struct sockaddr_in6 *si2;
+		si2 = (struct sockaddr_in6 *)(&sxprt->srcaddr);
+		memcpy(&si->sin6_addr, &si2->sin6_addr, sizeof(si2->sin6_addr));
+		srcaddra = (struct sockaddr *)(&srcaddr);
+	}
 
 	dprintk("RPC: %5u %s(%s, %u, %u, %d)\n",
 		task->tk_pid, __func__,
@@ -745,7 +769,8 @@ void rpcb_getport_async(struct rpc_task *task)
 	rpcb_clnt = rpcb_create(xprt->xprt_net,
 				clnt->cl_nodename,
 				xprt->servername, sap, salen,
-				xprt->prot, bind_version);
+				xprt->prot, bind_version, srcaddra);
+
 	if (IS_ERR(rpcb_clnt)) {
 		status = PTR_ERR(rpcb_clnt);
 		dprintk("RPC: %5u %s: rpcb_create failed, error %ld\n",
