@@ -2774,7 +2774,8 @@ static void qdisc_pkt_len_init(struct sk_buff *skb)
 
 static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 				 struct net_device *dev,
-				 struct netdev_queue *txq)
+				 struct netdev_queue *txq,
+				 bool try_no_consume)
 {
 	spinlock_t *root_lock = qdisc_lock(q);
 	bool contended;
@@ -2817,7 +2818,11 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 
 		rc = NET_XMIT_SUCCESS;
 	} else {
-		rc = q->enqueue(skb, q) & NET_XMIT_MASK;
+		if (try_no_consume && q->try_enqueue)
+			rc = q->try_enqueue(skb, q) & NET_XMIT_MASK;
+		else
+			rc = q->enqueue(skb, q) & NET_XMIT_MASK;
+
 		if (qdisc_run_begin(q)) {
 			if (unlikely(contended)) {
 				spin_unlock(&q->busylock);
@@ -2896,7 +2901,9 @@ EXPORT_SYMBOL(dev_loopback_xmit);
  *      the BH enable code must have IRQs enabled so that it will not deadlock.
  *          --BLG
  */
-static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
+
+static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv,
+			    int try_no_consume)
 {
 	struct net_device *dev = skb->dev;
 	struct netdev_queue *txq;
@@ -2931,7 +2938,7 @@ static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
 #endif
 	trace_net_dev_queue(skb);
 	if (q->enqueue) {
-		rc = __dev_xmit_skb(skb, q, dev, txq);
+		rc = __dev_xmit_skb(skb, q, dev, txq, try_no_consume);
 		goto out;
 	}
 
@@ -2997,13 +3004,19 @@ out:
 
 int dev_queue_xmit(struct sk_buff *skb)
 {
-	return __dev_queue_xmit(skb, NULL);
+	return __dev_queue_xmit(skb, NULL, 0);
 }
 EXPORT_SYMBOL(dev_queue_xmit);
 
+int try_dev_queue_xmit(struct sk_buff *skb, int try_no_consume)
+{
+	return __dev_queue_xmit(skb, NULL, try_no_consume);
+}
+EXPORT_SYMBOL(try_dev_queue_xmit);
+
 int dev_queue_xmit_accel(struct sk_buff *skb, void *accel_priv)
 {
-	return __dev_queue_xmit(skb, accel_priv);
+	return __dev_queue_xmit(skb, accel_priv, 0);
 }
 EXPORT_SYMBOL(dev_queue_xmit_accel);
 

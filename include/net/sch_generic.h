@@ -46,6 +46,7 @@ struct qdisc_size_table {
 
 struct Qdisc {
 	int 			(*enqueue)(struct sk_buff *skb, struct Qdisc *dev);
+	int 			(*try_enqueue)(struct sk_buff *, struct Qdisc *dev); /* May return NET_XMIT_BUSY and NOT free skb. */
 	struct sk_buff *	(*dequeue)(struct Qdisc *dev);
 	unsigned int		flags;
 #define TCQ_F_BUILTIN		1
@@ -183,6 +184,7 @@ struct Qdisc_ops {
 	int			priv_size;
 
 	int 			(*enqueue)(struct sk_buff *, struct Qdisc *);
+	int 			(*try_enqueue)(struct sk_buff *, struct Qdisc *); /* May return NET_XMIT_BUSY and NOT free skb. */
 	struct sk_buff *	(*dequeue)(struct Qdisc *);
 	struct sk_buff *	(*peek)(struct Qdisc *);
 	unsigned int		(*drop)(struct Qdisc *);
