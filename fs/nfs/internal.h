@@ -98,6 +98,11 @@ struct nfs_parsed_mount_data {
 	struct {
 		struct sockaddr_storage	address;
 		size_t			addrlen;
+	} srcaddr;
+
+	struct {
+		struct sockaddr_storage address;
+		size_t                  addrlen;
 		char			*hostname;
 		u32			version;
 		int			port;

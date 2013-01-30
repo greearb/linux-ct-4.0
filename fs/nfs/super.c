@@ -930,6 +930,8 @@ static struct nfs_parsed_mount_data *nfs_alloc_parsed_mount_data(void)
 		data->minorversion	= 0;
 		data->need_mount	= true;
 		data->net		= current->nsproxy->net_ns;
+		data->srcaddr.address.ss_family = AF_UNSPEC;
+		data->srcaddr.addrlen = sizeof(data->srcaddr.address);
 		security_init_mnt_opts(&data->lsm_opts);
 	}
 	return data;
