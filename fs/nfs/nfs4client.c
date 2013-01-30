@@ -811,6 +811,8 @@ static int nfs4_set_client(struct nfs_server *server,
 		const struct sockaddr *addr,
 		const size_t addrlen,
 		const char *ip_addr,
+		const struct sockaddr *srcaddr,
+		const size_t srcaddrlen,
 		rpc_authflavor_t authflavour,
 		int proto, const struct rpc_timeout *timeparms,
 		u32 minorversion, struct net *net)
@@ -823,6 +825,8 @@ static int nfs4_set_client(struct nfs_server *server,
 		.proto = proto,
 		.minorversion = minorversion,
 		.net = net,
+		.srcaddr = srcaddr,
+		.srcaddrlen = srcaddrlen,
 	};
 	struct nfs_client *clp;
 	int error;
@@ -1020,6 +1024,8 @@ static int nfs4_init_server(struct nfs_server *server,
 			(const struct sockaddr *)&data->nfs_server.address,
 			data->nfs_server.addrlen,
 			data->client_address,
+			(const struct sockaddr *)&data->srcaddr.address,
+			data->srcaddr.addrlen,
 			data->selected_flavor,
 			data->nfs_server.protocol,
 			&timeparms,
@@ -1117,6 +1123,8 @@ struct nfs_server *nfs4_create_referral_server(struct nfs_clone_mount *data,
 				data->addr,
 				data->addrlen,
 				parent_client->cl_ipaddr,
+				(const struct sockaddr *)&parent_client->srcaddr,
+				parent_client->srcaddrlen,
 				data->authflavor,
 				rpc_protocol(parent_server->client),
 				parent_server->client->cl_timeout,
@@ -1205,6 +1213,7 @@ int nfs4_update_server(struct nfs_server *server, const char *hostname,
 			(unsigned long long)server->fsid.minor,
 			hostname);
 
+	/* TODO-BEN:  Not sure this is all just right when binding to source-addr. */
 	error = rpc_switch_client_transport(clnt, &xargs, clnt->cl_timeout);
 	if (error != 0) {
 		dprintk("<-- %s(): rpc_switch_client_transport returned %d\n",
@@ -1228,6 +1237,8 @@ int nfs4_update_server(struct nfs_server *server, const char *hostname,
 
 	nfs_server_remove_lists(server);
 	error = nfs4_set_client(server, hostname, sap, salen, buf,
+				(struct sockaddr *)(&clp->srcaddr),
+				clp->srcaddrlen,
 				clp->cl_rpcclient->cl_auth->au_flavor,
 				clp->cl_proto, clnt->cl_timeout,
 				clp->cl_minorversion, net);
