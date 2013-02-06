@@ -3861,7 +3861,7 @@ void ieee80211_sta_work(struct ieee80211_sub_if_data *sdata)
 					 max_tries);
 				ieee80211_mgd_probe_ap_send(sdata);
 			} else {
-				mlme_dbg(sdata,
+				mlme_wrn(sdata,
 					 "No ack for nullfunc frame to AP %pM, disconnecting.\n",
 					 bssid);
 				ieee80211_sta_connection_lost(sdata, bssid,
@@ -3871,7 +3871,7 @@ void ieee80211_sta_work(struct ieee80211_sub_if_data *sdata)
 		} else if (time_is_after_jiffies(ifmgd->probe_timeout))
 			run_again(sdata, ifmgd->probe_timeout);
 		else if (local->hw.flags & IEEE80211_HW_REPORTS_TX_ACK_STATUS) {
-			mlme_dbg(sdata,
+			mlme_wrn(sdata,
 				 "Failed to send nullfunc to AP %pM after %dms, disconnecting\n",
 				 bssid, probe_wait_ms);
 			ieee80211_sta_connection_lost(sdata, bssid,
@@ -3887,11 +3887,11 @@ void ieee80211_sta_work(struct ieee80211_sub_if_data *sdata)
 			 * We actually lost the connection ... or did we?
 			 * Let's make sure!
 			 */
-			wiphy_debug(local->hw.wiphy,
-				    "%s: No probe response from AP %pM"
-				    " after %dms, disconnecting.\n",
-				    sdata->name,
-				    bssid, probe_wait_ms);
+			wiphy_warn(local->hw.wiphy,
+				   "%s: No probe response from AP %pM"
+				   " after %dms, disconnecting.\n",
+				   sdata->name,
+				   bssid, probe_wait_ms);
 
 			ieee80211_sta_connection_lost(sdata, bssid,
 				WLAN_REASON_DISASSOC_DUE_TO_INACTIVITY, false);
