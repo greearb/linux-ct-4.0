@@ -602,6 +602,9 @@ static int vlan_dev_init(struct net_device *dev)
 		netdev_warn(real_dev, "VLAN features are set incorrectly.  Q-in-Q configurations may not work correctly.\n");
 
 
+	if (netif_supports_nofcs(real_dev))
+		dev->priv_flags |= IFF_SUPP_NOFCS;
+
 	/* ipv6 shared card related stuff */
 	dev->dev_id = real_dev->dev_id;
 
