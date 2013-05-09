@@ -544,8 +544,11 @@ void ieee80211_sta_debugfs_add(struct sta_info *sta)
 
 	sta->debugfs.add_has_run = true;
 
-	if (!stations_dir)
+	if (!stations_dir) {
+		printk("%s: sta_debugfs_add: stations_dir is NULL\n",
+			sta->sdata->name);
 		return;
+	}
 
 	snprintf(mac, sizeof(mac), "%pM", sta->sta.addr);
 
@@ -559,8 +562,11 @@ void ieee80211_sta_debugfs_add(struct sta_info *sta)
 	 * dir might still be around.
 	 */
 	sta->debugfs.dir = debugfs_create_dir(mac, stations_dir);
-	if (!sta->debugfs.dir)
+	if (!sta->debugfs.dir) {
+		printk("%s: sta_debugfs_add: Failed to create sta->debugfs.dir\n",
+			sta->sdata->name);
 		return;
+	}
 
 	DEBUGFS_ADD(flags);
 	DEBUGFS_ADD(num_ps_buf_frames);
