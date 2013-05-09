@@ -299,8 +299,14 @@ static void dev_watchdog(unsigned long arg)
 			}
 
 			if (some_queue_timedout) {
-				WARN_ONCE(1, KERN_INFO "NETDEV WATCHDOG: %s (%s): transmit queue %u timed out\n",
-				       dev->name, netdev_drivername(dev), i);
+				printk(KERN_INFO "NETDEV WATCHDOG: %s (%s):"
+				       " transmit queue %u timed out,"
+				       " trans_start: %lu, wd-timeout: %i"
+				       " jiffies: %lu tx-queues: %i\n",
+				       dev->name, netdev_drivername(dev), i,
+				       trans_start, dev->watchdog_timeo,
+				       jiffies, dev->num_tx_queues);
+				WARN_ON_ONCE(1);
 				dev->netdev_ops->ndo_tx_timeout(dev);
 			}
 			if (!mod_timer(&dev->watchdog_timer,
