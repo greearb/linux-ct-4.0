@@ -815,6 +815,10 @@ struct mac80211_qos_map {
 
 struct ieee80211_sub_if_data {
 	struct list_head list;
+	struct ieee80211_sub_if_data *hnext; /* sdata hash list pointer */
+
+	/* Protected by local->sta_mtx */
+	struct sta_info __rcu *sta_vhash[STA_HASH_SIZE]; /* By station addr */
 
 	struct wireless_dev wdev;
 
@@ -953,6 +957,34 @@ sdata_assert_lock(struct ieee80211_sub_if_data *sdata)
 {
 	lockdep_assert_held(&sdata->wdev.mtx);
 }
+
+static inline
+void for_each_sdata_type_check(struct ieee80211_local *local,
+			       const u8 *addr,
+			       struct ieee80211_sub_if_data *sdata,
+			       struct ieee80211_sub_if_data *nxt)
+{
+}
+
+/* This deals with multiple sdata having same MAC */
+#define for_each_sdata(local, _addr, _sdata, nxt)			\
+	for (   /* initialise loop */					\
+		_sdata = rcu_dereference(local->sdata_hash[STA_HASH(_addr)]), \
+			nxt = _sdata ? rcu_dereference(_sdata->hnext) : NULL; \
+		/* typecheck */						\
+		for_each_sdata_type_check(local, (_addr), _sdata, nxt), \
+			/* continue condition */			\
+			_sdata;						\
+		/* advance loop */					\
+		_sdata = nxt,						\
+			nxt = _sdata ? rcu_dereference(_sdata->hnext) : NULL \
+		)							\
+		/* compare address and run code only if it matches */	\
+		if (ether_addr_equal(_sdata->vif.addr, (_addr)))
+
+
+struct ieee80211_sub_if_data*
+ieee80211_find_sdata(struct ieee80211_local *local, const u8 *vif_addr);
 
 static inline enum ieee80211_band
 ieee80211_get_sdata_band(struct ieee80211_sub_if_data *sdata)
@@ -1235,6 +1267,8 @@ struct ieee80211_local {
 	u32 wep_iv;
 
 	/* see iface.c */
+	/* Hash interfaces by VIF mac addr */
+	struct ieee80211_sub_if_data __rcu *sdata_hash[STA_HASH_SIZE];
 	struct list_head interfaces;
 	struct mutex iflist_mtx;
 

@@ -69,27 +69,54 @@ static int sta_info_hash_del(struct ieee80211_local *local,
 			     struct sta_info *sta)
 {
 	struct sta_info *s;
+	int rv = -ENOENT;
+	int idx = STA_HASH(sta->sta.addr);
+	struct ieee80211_sub_if_data *sdata = sta->sdata;
 
-	s = rcu_dereference_protected(local->sta_hash[STA_HASH(sta->sta.addr)],
+	s = rcu_dereference_protected(local->sta_hash[idx],
 				      lockdep_is_held(&local->sta_mtx));
 	if (!s)
-		return -ENOENT;
+		/* If station is not in the main hash, then it definitely
+		 * should not be in the vhash, so we can just return.
+		 */
+		return rv;
+
 	if (s == sta) {
-		rcu_assign_pointer(local->sta_hash[STA_HASH(sta->sta.addr)],
-				   s->hnext);
-		return 0;
+		rcu_assign_pointer(local->sta_hash[idx], s->hnext);
+		rv = 0;
+		goto try_vhash;
 	}
 
 	while (rcu_access_pointer(s->hnext) &&
 	       rcu_access_pointer(s->hnext) != sta)
 		s = rcu_dereference_protected(s->hnext,
-					lockdep_is_held(&local->sta_mtx));
+					      lockdep_is_held(&local->sta_mtx));
 	if (rcu_access_pointer(s->hnext)) {
 		rcu_assign_pointer(s->hnext, sta->hnext);
-		return 0;
+		rv = 0;
+		goto try_vhash;
+	}
+	return rv;
+
+try_vhash:
+	s = rcu_dereference_protected(sdata->sta_vhash[idx],
+				      lockdep_is_held(&local->sta_mtx));
+	if (!s)
+		return rv;
+
+	if (s == sta) {
+		rcu_assign_pointer(sdata->sta_vhash[idx], s->vnext);
+		return rv;
 	}
 
-	return -ENOENT;
+	while (rcu_access_pointer(s->vnext) &&
+	       rcu_access_pointer(s->vnext) != sta)
+		s = rcu_dereference_protected(s->vnext,
+					      lockdep_is_held(&local->sta_mtx));
+	if (rcu_access_pointer(s->vnext))
+		rcu_assign_pointer(s->vnext, sta->vnext);
+
+	return rv;
 }
 
 static void __cleanup_single_sta(struct sta_info *sta)
@@ -158,17 +185,15 @@ static void cleanup_single_sta(struct sta_info *sta)
 struct sta_info *sta_info_get(struct ieee80211_sub_if_data *sdata,
 			      const u8 *addr)
 {
-	struct ieee80211_local *local = sdata->local;
 	struct sta_info *sta;
 
-	sta = rcu_dereference_check(local->sta_hash[STA_HASH(addr)],
-				    lockdep_is_held(&local->sta_mtx));
+	sta = rcu_dereference_check(sdata->sta_vhash[STA_HASH(addr)],
+				    lockdep_is_held(&sdata->local->sta_mtx));
 	while (sta) {
-		if (sta->sdata == sdata &&
-		    ether_addr_equal(sta->sta.addr, addr))
+		if (ether_addr_equal(sta->sta.addr, addr))
 			break;
-		sta = rcu_dereference_check(sta->hnext,
-					    lockdep_is_held(&local->sta_mtx));
+		sta = rcu_dereference_check(sta->vnext,
+				lockdep_is_held(&sdata->local->sta_mtx));
 	}
 	return sta;
 }
@@ -183,6 +208,13 @@ struct sta_info *sta_info_get_bss(struct ieee80211_sub_if_data *sdata,
 	struct ieee80211_local *local = sdata->local;
 	struct sta_info *sta;
 
+	sta = sta_info_get(sdata, addr);
+	if (sta)
+		return sta;
+
+	/* Maybe it's on some other sdata matching the bss, try
+	 * a bit harder.
+	 */
 	sta = rcu_dereference_check(local->sta_hash[STA_HASH(addr)],
 				    lockdep_is_held(&local->sta_mtx));
 	while (sta) {
@@ -195,6 +227,22 @@ struct sta_info *sta_info_get_bss(struct ieee80211_sub_if_data *sdata,
 	}
 	return sta;
 }
+
+struct sta_info *sta_info_get_by_vif(struct ieee80211_local *local,
+				     const u8 *vif_addr, const u8 *sta_addr)
+{
+	struct ieee80211_sub_if_data *sdata;
+	struct ieee80211_sub_if_data *nxt;
+	struct sta_info *sta;
+
+	for_each_sdata(local, vif_addr, sdata, nxt) {
+		sta = sta_info_get(sdata, sta_addr);
+		if (sta)
+			return sta;
+	}
+	return NULL;
+}
+
 
 struct sta_info *sta_info_get_by_idx(struct ieee80211_sub_if_data *sdata,
 				     int idx)
@@ -250,9 +298,14 @@ void sta_info_free(struct ieee80211_local *local, struct sta_info *sta)
 static void sta_info_hash_add(struct ieee80211_local *local,
 			      struct sta_info *sta)
 {
+	int idx = STA_HASH(sta->sta.addr);
+
 	lockdep_assert_held(&local->sta_mtx);
-	sta->hnext = local->sta_hash[STA_HASH(sta->sta.addr)];
-	rcu_assign_pointer(local->sta_hash[STA_HASH(sta->sta.addr)], sta);
+	sta->hnext = local->sta_hash[idx];
+	rcu_assign_pointer(local->sta_hash[idx], sta);
+
+	sta->vnext = sta->sdata->sta_vhash[idx];
+	rcu_assign_pointer(sta->sdata->sta_vhash[idx], sta);
 }
 
 static void sta_deliver_ps_frames(struct work_struct *wk)
@@ -1075,14 +1128,18 @@ struct ieee80211_sta *ieee80211_find_sta_by_ifaddr(struct ieee80211_hw *hw,
 {
 	struct sta_info *sta, *nxt;
 
+	if (localaddr) {
+		sta = sta_info_get_by_vif(hw_to_local(hw), localaddr, addr);
+		if (sta && sta->uploaded)
+			return &sta->sta;
+		return NULL;
+	}
+
 	/*
 	 * Just return a random station if localaddr is NULL
 	 * ... first in list.
 	 */
 	for_each_sta_info(hw_to_local(hw), addr, sta, nxt) {
-		if (localaddr &&
-		    !ether_addr_equal(sta->sdata->vif.addr, localaddr))
-			continue;
 		if (!sta->uploaded)
 			return NULL;
 		return &sta->sta;

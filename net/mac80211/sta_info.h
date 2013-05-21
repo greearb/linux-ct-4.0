@@ -16,6 +16,7 @@
 #include <linux/workqueue.h>
 #include <linux/average.h>
 #include <linux/etherdevice.h>
+#include <linux/hash.h>
 #include "key.h"
 
 /**
@@ -267,7 +268,8 @@ struct ieee80211_tx_latency_stat {
  *
  * @list: global linked list entry
  * @free_list: list entry for keeping track of stations to free
- * @hnext: hash table linked list pointer
+ * @hnext: hash table linked list pointer, used by local->sta_hash
+ * @vnext: hash table linked list pointer, used by sdata->sta_vhash.
  * @local: pointer to the global information
  * @sdata: virtual interface this station belongs to
  * @ptk: peer keys negotiated with this station, if any
@@ -362,6 +364,7 @@ struct sta_info {
 	struct list_head list, free_list;
 	struct rcu_head rcu_head;
 	struct sta_info __rcu *hnext;
+	struct sta_info __rcu *vnext;
 	struct ieee80211_local *local;
 	struct ieee80211_sub_if_data *sdata;
 	struct ieee80211_key __rcu *gtk[NUM_DEFAULT_KEYS + NUM_DEFAULT_MGMT_KEYS];
@@ -560,7 +563,11 @@ rcu_dereference_protected_tid_tx(struct sta_info *sta, int tid)
 }
 
 #define STA_HASH_SIZE 256
-#define STA_HASH(sta) (sta[5])
+static inline u32 STA_HASH(const unsigned char* addr) {
+	u32 v = (addr[0] << 8) | addr[1];
+	v ^= (addr[2] << 24) | (addr[3] << 16) | (addr[4] << 8) | addr[5];
+	return hash_32(v, 8);
+}
 
 
 /* Maximum number of frames to buffer per power saving station per AC */
@@ -582,6 +589,12 @@ struct sta_info *sta_info_get(struct ieee80211_sub_if_data *sdata,
 
 struct sta_info *sta_info_get_bss(struct ieee80211_sub_if_data *sdata,
 				  const u8 *addr);
+/*
+ * Uses the local->sdata hash and sdata->sta_hash for fast lookup
+ * base on VIF (sdata) address and remote station address.
+ */
+struct sta_info *sta_info_get_by_vif(struct ieee80211_local *local,
+				     const u8 *vif_addr, const u8 *sta_addr);
 
 static inline
 void for_each_sta_info_type_check(struct ieee80211_local *local,

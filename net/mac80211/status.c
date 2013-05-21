@@ -739,6 +739,10 @@ void ieee80211_tx_status(struct ieee80211_hw *hw, struct sk_buff *skb)
 	sband = local->hw.wiphy->bands[info->band];
 	fc = hdr->frame_control;
 
+	sta = sta_info_get_by_vif(local, hdr->addr2, hdr->addr1);
+	if (sta)
+		goto found_it;
+
 	for_each_sta_info(local, hdr->addr1, sta, tmp) {
 		/* skip wrong virtual interface */
 		if (!ether_addr_equal(hdr->addr2, sta->sdata->vif.addr))
@@ -746,6 +750,7 @@ void ieee80211_tx_status(struct ieee80211_hw *hw, struct sk_buff *skb)
 
 		shift = ieee80211_vif_get_shift(&sta->sdata->vif);
 
+found_it:
 		if (info->flags & IEEE80211_TX_STATUS_EOSP)
 			clear_sta_flag(sta, WLAN_STA_SP);
 
@@ -859,6 +864,7 @@ void ieee80211_tx_status(struct ieee80211_hw *hw, struct sk_buff *skb)
 		 * statistics calculation
 		 */
 		ieee80211_tx_latency_end_msrmnt(local, skb, sta, hdr);
+		break;
 	}
 
 	rcu_read_unlock();
