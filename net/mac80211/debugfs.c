@@ -373,9 +373,51 @@ static ssize_t sta_hash_read(struct file *file, char __user *user_buf,
 	return q;
 }
 
+static ssize_t sdata_hash_read(struct file *file, char __user *user_buf,
+			       size_t count, loff_t *ppos)
+{
+	struct ieee80211_local *local = file->private_data;
+	int mxln = 15000;
+	char *buf = kzalloc(mxln, GFP_KERNEL);
+	int q, res = 0;
+	struct ieee80211_sub_if_data *s;
+
+	if (!buf)
+		return 0;
+
+	mutex_lock(&local->iflist_mtx);
+	for (q = 0; q < STA_HASH_SIZE; q++) {
+		s = local->sdata_hash[q];
+		if (s) {
+			res += snprintf(buf + res, mxln - res, "%i: ", q);
+			if (res >= mxln)
+				goto done;
+		}
+		while (s) {
+			res += snprintf(buf + res, mxln - res, " %pM",
+					s->vif.addr);
+			if (res >= mxln)
+				goto done;
+			s = s->hnext;
+		}
+		if (local->sdata_hash[q]) {
+			res += snprintf(buf + res, mxln - res, "\n");
+			if (res >= mxln)
+				goto done;
+		}
+	}
+done:
+	mutex_unlock(&local->iflist_mtx);
+
+	q = simple_read_from_buffer(user_buf, count, ppos, buf, res);
+	kfree(buf);
+	return q;
+}
+
 DEBUGFS_READONLY_FILE_OPS(hwflags);
 DEBUGFS_READONLY_FILE_OPS(queues);
 DEBUGFS_READONLY_FILE_OPS(sta_hash);
+DEBUGFS_READONLY_FILE_OPS(sdata_hash);
 
 /* statistics stuff */
 
@@ -445,6 +487,7 @@ void debugfs_hw_add(struct ieee80211_local *local)
 	DEBUGFS_ADD(wep_iv);
 	DEBUGFS_ADD(queues);
 	DEBUGFS_ADD(sta_hash);
+	DEBUGFS_ADD(sdata_hash);
 #ifdef CONFIG_PM
 	DEBUGFS_ADD_MODE(reset, 0200);
 #endif

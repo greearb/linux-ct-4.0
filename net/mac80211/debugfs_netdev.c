@@ -30,16 +30,21 @@ static ssize_t ieee80211_if_read(
 	size_t count, loff_t *ppos,
 	ssize_t (*format)(const struct ieee80211_sub_if_data *, char *, int))
 {
-	char buf[70];
+	int mxln = STA_HASH_SIZE * 10;
+	char *buf = kzalloc(mxln, GFP_KERNEL);
 	ssize_t ret = -EINVAL;
 
+	if (!buf)
+		return 0;
+
 	read_lock(&dev_base_lock);
-	ret = (*format)(sdata, buf, sizeof(buf));
+	ret = (*format)(sdata, buf, mxln);
 	read_unlock(&dev_base_lock);
 
 	if (ret >= 0)
 		ret = simple_read_from_buffer(userbuf, count, ppos, buf, ret);
 
+	kfree(buf);
 	return ret;
 }
 
@@ -212,6 +217,50 @@ ieee80211_if_fmt_hw_queues(const struct ieee80211_sub_if_data *sdata,
 	return len;
 }
 IEEE80211_IF_FILE_R(hw_queues);
+
+static ssize_t
+ieee80211_if_fmt_sta_hash(const struct ieee80211_sub_if_data *sdata,
+			  char *buf, int buflen)
+{
+	int q, res = 0;
+	struct sta_info *sta;
+
+	mutex_lock(&sdata->local->sta_mtx);
+	for (q = 0; q < STA_HASH_SIZE; q++) {
+		int cnt = 0;
+		sta = sdata->sta_vhash[q];
+		while (sta) {
+			cnt++;
+			sta = sta->vnext;
+		}
+		if (cnt) {
+			res += snprintf(buf + res, buflen - res, "%i: %i ",
+					q, cnt);
+			if (res >= buflen) {
+				res = buflen;
+				break;
+			}
+			sta = sdata->sta_vhash[q];
+			while (sta) {
+				res += snprintf(buf + res, buflen - res, " %pM",
+						sta->sta.addr);
+				if (res >= buflen) {
+					res = buflen;
+					break;
+				}
+				sta = sta->vnext;
+			}
+			res += snprintf(buf + res, buflen - res, "\n");
+			if (res >= buflen) {
+				res = buflen;
+				break;
+			}
+		}
+	}
+	mutex_unlock(&sdata->local->sta_mtx);
+	return res;
+}
+__IEEE80211_IF_FILE(sta_hash, NULL);
 
 /* STA attributes */
 IEEE80211_IF_FILE(bssid, u.mgd.bssid, MAC);
@@ -568,6 +617,7 @@ static void add_common_files(struct ieee80211_sub_if_data *sdata)
 	DEBUGFS_ADD(rc_rateidx_mcs_mask_2ghz);
 	DEBUGFS_ADD(rc_rateidx_mcs_mask_5ghz);
 	DEBUGFS_ADD(hw_queues);
+	DEBUGFS_ADD(sta_hash);
 }
 
 static void add_sta_files(struct ieee80211_sub_if_data *sdata)
