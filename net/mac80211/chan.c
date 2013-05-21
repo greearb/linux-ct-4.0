@@ -578,8 +578,11 @@ static void ieee80211_recalc_chanctx_chantype(struct ieee80211_local *local,
 
 		compat = cfg80211_chandef_compatible(
 				&sdata->vif.bss_conf.chandef, compat);
-		if (WARN_ON_ONCE(!compat))
+		if (WARN_ON_ONCE(!compat)) {
+			printk("compat was NULL in chanctx_chantype, dev: %s\n",
+			       sdata->name);
 			break;
+		}
 	}
 	rcu_read_unlock();
 
