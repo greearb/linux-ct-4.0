@@ -810,6 +810,10 @@ u32 ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
 
 		if (elen > left) {
 			elems->parse_error = true;
+			snprintf(elems->parse_err_msg,
+				 sizeof(elems->parse_err_msg),
+				 "elen: %hhu > left: %zu",
+				 elen, left);
 			break;
 		}
 
@@ -853,6 +857,9 @@ u32 ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
 		 */
 			if (test_bit(id, seen_elems)) {
 				elems->parse_error = true;
+				snprintf(elems->parse_err_msg,
+					 sizeof(elems->parse_err_msg),
+					 "seen id: %i already", id);
 				left -= elen;
 				pos += elen;
 				continue;
@@ -902,8 +909,14 @@ u32 ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
 			if (elen >= sizeof(struct ieee80211_tim_ie)) {
 				elems->tim = (void *)pos;
 				elems->tim_len = elen;
-			} else
+			} else {
 				elem_parse_failed = true;
+				snprintf(elems->parse_err_msg,
+					 sizeof(elems->parse_err_msg),
+					 "EID_TIM size wrong, elen: %hhu  sizeof(tim_ie): %zu",
+					 elen,
+					 sizeof(struct ieee80211_tim_ie));
+			}
 			break;
 		case WLAN_EID_CHALLENGE:
 			elems->challenge = pos;
@@ -946,32 +959,61 @@ u32 ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
 		case WLAN_EID_HT_CAPABILITY:
 			if (elen >= sizeof(struct ieee80211_ht_cap))
 				elems->ht_cap_elem = (void *)pos;
-			else
+			else {
 				elem_parse_failed = true;
+				snprintf(elems->parse_err_msg,
+					 sizeof(elems->parse_err_msg),
+					 "HT_CAPAB size wrong, elen: %hhu  sizeof(ht_cap): %zu",
+					 elen,
+					 sizeof(struct ieee80211_ht_cap));
+			}
 			break;
 		case WLAN_EID_HT_OPERATION:
 			if (elen >= sizeof(struct ieee80211_ht_operation))
 				elems->ht_operation = (void *)pos;
-			else
+			else {
 				elem_parse_failed = true;
+				snprintf(elems->parse_err_msg,
+					 sizeof(elems->parse_err_msg),
+					 "HT_OPER size wrong, elen: %hhu  sizeof(ht_oper): %zu",
+					 elen,
+					 sizeof(struct ieee80211_ht_operation));
+			}
 			break;
 		case WLAN_EID_VHT_CAPABILITY:
 			if (elen >= sizeof(struct ieee80211_vht_cap))
 				elems->vht_cap_elem = (void *)pos;
-			else
+			else {
 				elem_parse_failed = true;
+				snprintf(elems->parse_err_msg,
+					 sizeof(elems->parse_err_msg),
+					 "EID_VHT size wrong, elen: %hhu  sizeof(vht_cap): %zu",
+					 elen,
+					 sizeof(struct ieee80211_vht_cap));
+			}
 			break;
 		case WLAN_EID_VHT_OPERATION:
 			if (elen >= sizeof(struct ieee80211_vht_operation))
 				elems->vht_operation = (void *)pos;
-			else
+			else {
 				elem_parse_failed = true;
+				snprintf(elems->parse_err_msg,
+					 sizeof(elems->parse_err_msg),
+					 "VHT_OPER size wrong, elen: %hhu  sizeof(vht_oper): %zu",
+					 elen,
+					 sizeof(struct ieee80211_vht_operation));
+			}
 			break;
 		case WLAN_EID_OPMODE_NOTIF:
 			if (elen > 0)
 				elems->opmode_notif = pos;
-			else
+			else {
 				elem_parse_failed = true;
+				snprintf(elems->parse_err_msg,
+					 sizeof(elems->parse_err_msg),
+					 "OPMODE_NOTIF has elen > 0: %hhu",
+					 elen);
+			}
 			break;
 		case WLAN_EID_MESH_ID:
 			elems->mesh_id = pos;
@@ -980,8 +1022,14 @@ u32 ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
 		case WLAN_EID_MESH_CONFIG:
 			if (elen >= sizeof(struct ieee80211_meshconf_ie))
 				elems->mesh_config = (void *)pos;
-			else
+			else {
 				elem_parse_failed = true;
+				snprintf(elems->parse_err_msg,
+					 sizeof(elems->parse_err_msg),
+					 "MESH_CONFIG size wrong, elen: %hhu  sizeof(meshconf_ie): %zu",
+					 elen,
+					 sizeof(struct ieee80211_meshconf_ie));
+			}
 			break;
 		case WLAN_EID_PEER_MGMT:
 			elems->peering = pos;
@@ -1006,12 +1054,23 @@ u32 ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
 		case WLAN_EID_RANN:
 			if (elen >= sizeof(struct ieee80211_rann_ie))
 				elems->rann = (void *)pos;
-			else
+			else {
 				elem_parse_failed = true;
+				snprintf(elems->parse_err_msg,
+					 sizeof(elems->parse_err_msg),
+					 "EID_RANN size wrong, elen: %hhu  sizeof(rann_ie): %zu",
+					 elen,
+					 sizeof(struct ieee80211_rann_ie));
+			}
 			break;
 		case WLAN_EID_CHANNEL_SWITCH:
 			if (elen != sizeof(struct ieee80211_channel_sw_ie)) {
 				elem_parse_failed = true;
+				snprintf(elems->parse_err_msg,
+					 sizeof(elems->parse_err_msg),
+					 "CH_SWITCH size wrong, elen: %hhu  sizeof(sw_ie): %zu",
+					 elen,
+					 sizeof(struct ieee80211_channel_sw_ie));
 				break;
 			}
 			elems->ch_switch_ie = (void *)pos;
@@ -1073,6 +1132,10 @@ u32 ieee802_11_parse_elems_crc(const u8 *start, size_t len, bool action,
 		case WLAN_EID_PWR_CONSTRAINT:
 			if (elen != 1) {
 				elem_parse_failed = true;
+				snprintf(elems->parse_err_msg,
+					 sizeof(elems->parse_err_msg),
+					 "PWR_CONSTRAINT size not 1, elen: %hhu",
+					 elen);
 				break;
 			}
 			elems->pwr_constr_elem = pos;
