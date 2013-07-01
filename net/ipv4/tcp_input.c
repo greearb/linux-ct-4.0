@@ -4610,7 +4610,16 @@ restart:
 			int offset = start - TCP_SKB_CB(skb)->seq;
 			int size = TCP_SKB_CB(skb)->end_seq - start;
 
-			BUG_ON(offset < 0);
+			if (WARN_ON(offset < 0)) {
+				/* We see a crash here (when using BUG_ON) every few days under
+				 * some torture tests.  I'm not sure how to clean this up properly,
+				 * so just return and hope thinks keep muddling through. --Ben
+				 */
+				printk("offset: %i  start: %u seq: %u  end_seq: %u size: %i copy: %i\n",
+				       offset, start, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->seq,
+				       size, copy);
+				return;
+			}
 			if (size > 0) {
 				size = min(copy, size);
 				if (skb_copy_bits(skb, offset, skb_put(nskb, size), size))
