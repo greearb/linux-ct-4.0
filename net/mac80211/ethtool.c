@@ -170,7 +170,7 @@ do_survey:
 	if (channel)
 		data[i++] = channel->center_freq;
 	else
-		data[i++] = local->hw.conf.channel->center_freq;
+		data[i++] = local->_oper_chandef.chan->center_freq;
 	if (survey.filled & SURVEY_INFO_NOISE_DBM)
 		data[i++] = (u8)survey.noise;
 	else
