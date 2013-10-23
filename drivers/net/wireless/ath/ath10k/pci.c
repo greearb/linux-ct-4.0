@@ -1023,6 +1023,102 @@ static void ath10k_pci_dump_registers(struct ath10k *ar,
 		crash_data->registers[i] = reg_dump_values[i];
 }
 
+/**
+ * Read any not-yet-delivered debug-log buffers on the target
+ * and save them to storage in the host driver.  Typically
+ * only done on crash, as firmware will normally deliver
+ * logs periodically on its own if it is functioning
+ * properly.
+ */
+static void ath10k_pci_dump_dbglog(struct ath10k *ar)
+{
+	struct ath10k_fw_dbglog_hdr dbg_hdr;
+	u32 dbufp; /* pointer in target memory space */
+	struct ath10k_fw_dbglog_buf dbuf;
+	u8 *buffer;
+	int ret;
+	int i;
+	int len;
+
+	ret = ath10k_pci_diag_read_hi(ar, &dbg_hdr, hi_dbglog_hdr,
+				      sizeof(dbg_hdr));
+	if (ret != 0) {
+		ath10k_err(ar, "failed to dump debug log area: %d\n", ret);
+		return;
+	}
+
+	ath10k_dbg(ar, ATH10K_DBG_PCI,
+		   "debug log header, dbuf: 0x%x  dropped: %i\n",
+		   le32_to_cpu(dbg_hdr.dbuf), le32_to_cpu(dbg_hdr.dropped));
+	dbufp = le32_to_cpu(dbg_hdr.dbuf);
+
+	/* i is for logging purposes and sanity check in case firmware buffers
+	 * are corrupted and will not properly terminate the list.
+	 * In standard firmware, it appears there are no more than 2
+	 * buffers, so 10 should be safe upper limit even if firmware
+	 * changes quite a bit.
+	 */
+	i = 0;
+	while (dbufp && i < 10) {
+		ret = ath10k_pci_diag_read_mem(ar, dbufp, &dbuf, sizeof(dbuf));
+		if (ret != 0) {
+			ath10k_err(ar, "failed to read debug log area: %d (addr 0x%x)\n",
+				   ret, dbufp);
+			return;
+		}
+
+		len = le32_to_cpu(dbuf.length);
+
+		ath10k_dbg(ar, ATH10K_DBG_PCI,
+			   "[%i] next: 0x%x buf: 0x%x sz: %i len: %i count: %i free: %i\n",
+			   i, le32_to_cpu(dbuf.next), le32_to_cpu(dbuf.buffer),
+			   le32_to_cpu(dbuf.bufsize), len,
+			   le32_to_cpu(dbuf.count), le32_to_cpu(dbuf.free));
+		if (dbuf.buffer == 0 || len == 0)
+			goto next;
+
+		/* Pick arbitrary upper bound in case firmware is corrupted for
+		 * whatever reason.
+		 */
+		if (len > 4096) {
+			ath10k_err(ar,
+				   "debuglog buf length is out of bounds: %d\n",
+				   len);
+			/* Do not trust the next pointer either... */
+			return;
+		}
+
+		buffer = kmalloc(len, GFP_ATOMIC);
+
+		if (!buffer)
+			goto next;
+
+		ret = ath10k_pci_diag_read_mem(ar, le32_to_cpu(dbuf.buffer),
+					       buffer, len);
+		if (ret != 0) {
+			ath10k_err(ar, "failed to read debug log buffer: %d (addr 0x%x)\n",
+				   ret, le32_to_cpu(dbuf.buffer));
+			kfree(buffer);
+			return;
+		}
+
+		WARN_ON(len & 0x3);
+
+		ath10k_dbg_save_fw_dbg_buffer(ar, (__le32 *)(buffer), len >> 2);
+		kfree(buffer);
+
+next:
+		dbufp = le32_to_cpu(dbuf.next);
+		if (dbufp == le32_to_cpu(dbg_hdr.dbuf)) {
+			/* It is a circular buffer it seems, bail if next
+			 * is head
+			 */
+			break;
+		}
+		i++;
+	} /* While we have a debug buffer to read */
+}
+
 static void ath10k_pci_fw_crashed_dump(struct ath10k *ar)
 {
 	struct ath10k_fw_crash_data *crash_data;
@@ -1042,6 +1138,9 @@ static void ath10k_pci_fw_crashed_dump(struct ath10k *ar)
 	ath10k_err(ar, "firmware crashed! (uuid %s)\n", uuid);
 	ath10k_print_driver_info(ar);
 	ath10k_pci_dump_registers(ar, crash_data);
+	ath10k_pci_dump_dbglog(ar);
+	if (crash_data)
+		crash_data->crashed_since_read = true;
 
 	spin_unlock_bh(&ar->data_lock);
 

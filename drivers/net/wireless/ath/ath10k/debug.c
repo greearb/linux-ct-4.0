@@ -33,10 +33,11 @@
 /**
  * enum ath10k_fw_crash_dump_type - types of data in the dump file
  * @ATH10K_FW_CRASH_DUMP_REGDUMP: Register crash dump in binary format
+ * @ATH10K_FW_ERROR_DUMP_DBGLOG:  Recent firmware debug log entries
  */
 enum ath10k_fw_crash_dump_type {
 	ATH10K_FW_CRASH_DUMP_REGISTERS = 0,
-
+	ATH10K_FW_CRASH_DUMP_DBGLOG = 1,
 	ATH10K_FW_CRASH_DUMP_MAX,
 };
 
@@ -105,6 +106,12 @@ struct ath10k_dump_file_data {
 
 	/* struct ath10k_tlv_dump_data + more */
 	u8 data[0];
+} __packed;
+
+struct ath10k_dbglog_entry_storage_user {
+	__le32 head_idx; /* Where to write next chunk of data */
+	__le32 tail_idx; /* Index of first msg */
+	__le32 data[ATH10K_DBGLOG_DATA_LEN];
 } __packed;
 
 void ath10k_info(struct ath10k *ar, const char *fmt, ...)
@@ -806,7 +813,6 @@ ath10k_debug_get_new_fw_crash_data(struct ath10k *ar)
 
 	lockdep_assert_held(&ar->data_lock);
 
-	crash_data->crashed_since_read = true;
 	uuid_le_gen(&crash_data->uuid);
 	getnstimeofday(&crash_data->timestamp);
 
@@ -814,17 +820,87 @@ ath10k_debug_get_new_fw_crash_data(struct ath10k *ar)
 }
 EXPORT_SYMBOL(ath10k_debug_get_new_fw_crash_data);
 
+static void ath10k_dbg_drop_dbg_buffer(struct ath10k *ar)
+{
+	/* Find next message boundary */
+	u32 lg_hdr;
+	int acnt;
+	int tail_idx = ar->debug.dbglog_entry_data.tail_idx;
+	int h_idx = (tail_idx + 1) % ATH10K_DBGLOG_DATA_LEN;
+
+	lockdep_assert_held(&ar->data_lock);
+
+	/* Log header is second 32-bit word */
+	lg_hdr = le32_to_cpu(ar->debug.dbglog_entry_data.data[h_idx]);
+
+	acnt = (lg_hdr & DBGLOG_NUM_ARGS_MASK) >> DBGLOG_NUM_ARGS_OFFSET;
+
+	if (acnt > DBGLOG_NUM_ARGS_MAX) {
+		/* Some sort of corruption it seems, recover as best we can. */
+		ath10k_err(ar, "invalid dbglog arg-count: %i %i %i\n",
+			   acnt, ar->debug.dbglog_entry_data.tail_idx,
+			   ar->debug.dbglog_entry_data.head_idx);
+		ar->debug.dbglog_entry_data.tail_idx =
+			ar->debug.dbglog_entry_data.head_idx;
+		return;
+	}
+
+	/* Move forward over the args and the two header fields */
+	ar->debug.dbglog_entry_data.tail_idx =
+		(tail_idx + acnt + 2) % ATH10K_DBGLOG_DATA_LEN;
+}
+
+void ath10k_dbg_save_fw_dbg_buffer(struct ath10k *ar, __le32 *buffer, int len)
+{
+	int i;
+	int z;
+
+	lockdep_assert_held(&ar->data_lock);
+
+	z = ar->debug.dbglog_entry_data.head_idx;
+
+	/* Don't save any new logs until user-space reads this. */
+	if (ar->debug.fw_crash_data &&
+	    ar->debug.fw_crash_data->crashed_since_read) {
+		ath10k_warn(ar, "dropping dbg buffer due to crash since read\n");
+		return;
+	}
+
+	for (i = 0; i < len; i++) {
+		ar->debug.dbglog_entry_data.data[z] = buffer[i];
+		z++;
+		if (z >= ATH10K_DBGLOG_DATA_LEN)
+			z = 0;
+
+		/* If we are about to over-write an old message, move the
+		 * tail_idx to the next message.  If idx's are same, we
+		 * are empty.
+		 */
+		if (z == ar->debug.dbglog_entry_data.tail_idx)
+			ath10k_dbg_drop_dbg_buffer(ar);
+
+		ar->debug.dbglog_entry_data.head_idx = z;
+	}
+}
+EXPORT_SYMBOL(ath10k_dbg_save_fw_dbg_buffer);
+
 static struct ath10k_dump_file_data *ath10k_build_dump_file(struct ath10k *ar)
 {
 	struct ath10k_fw_crash_data *crash_data = ar->debug.fw_crash_data;
 	struct ath10k_dump_file_data *dump_data;
 	struct ath10k_tlv_dump_data *dump_tlv;
+	struct ath10k_dbglog_entry_storage_user *dbglog_storage;
 	int hdr_len = sizeof(*dump_data);
 	unsigned int len, sofar = 0;
 	unsigned char *buf;
+	int tmp;
+
+	BUILD_BUG_ON(sizeof(struct ath10k_dbglog_entry_storage) !=
+		     sizeof(struct ath10k_dbglog_entry_storage_user));
 
 	len = hdr_len;
 	len += sizeof(*dump_tlv) + sizeof(crash_data->registers);
+	len += sizeof(*dump_tlv) + sizeof(ar->debug.dbglog_entry_data);
 
 	sofar += hdr_len;
 
@@ -883,8 +959,25 @@ static struct ath10k_dump_file_data *ath10k_build_dump_file(struct ath10k *ar)
 	       sizeof(crash_data->registers));
 	sofar += sizeof(*dump_tlv) + sizeof(crash_data->registers);
 
+	/* Gather dbg-log */
+	tmp = sizeof(ar->debug.dbglog_entry_data);
+	dump_tlv = (struct ath10k_tlv_dump_data *)(buf + sofar);
+	dump_tlv->type = cpu_to_le32(ATH10K_FW_CRASH_DUMP_DBGLOG);
+	dump_tlv->tlv_len = cpu_to_le32(tmp);
+	dbglog_storage =
+		(struct ath10k_dbglog_entry_storage_user *)(dump_tlv->tlv_data);
+	memcpy(dbglog_storage->data, ar->debug.dbglog_entry_data.data,
+	       sizeof(dbglog_storage->data));
+	dbglog_storage->head_idx =
+		cpu_to_le32(ar->debug.dbglog_entry_data.head_idx);
+	dbglog_storage->tail_idx =
+		cpu_to_le32(ar->debug.dbglog_entry_data.tail_idx);
+
+	sofar += sizeof(*dump_tlv) + tmp;
+
 	ar->debug.fw_crash_data->crashed_since_read = false;
 
+	WARN_ON(sofar != len);
 	spin_unlock_bh(&ar->data_lock);
 
 	return dump_data;

@@ -4840,6 +4840,12 @@ struct wmi_svc_rdy_ev_arg {
 	const struct wlan_host_mem_req *mem_reqs[WMI_MAX_MEM_REQS];
 };
 
+struct ath10k_fw_dbglog_report {
+	__le32 dropped_count;
+	__le32 messages[];
+} __packed;
+
+
 struct wmi_rdy_ev_arg {
 	__le32 sw_version;
 	__le32 abi_version;

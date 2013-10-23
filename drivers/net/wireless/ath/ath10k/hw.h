@@ -492,4 +492,25 @@ struct ath10k_pktlog_hdr {
 
 #define RTC_STATE_V_GET(x) (((x) & RTC_STATE_V_MASK) >> RTC_STATE_V_LSB)
 
+/* Target debug log related defines and structs */
+
+/* Target is 32-bit CPU, so we just use u32 for
+ * the pointers.  The memory space is relative to the
+ * target, not the host.  Values are converted to host
+ * byte order when reading from firmware.
+ */
+struct ath10k_fw_dbglog_buf {
+	__le32 next; /* pointer to ath10k_fw_dbglog_buf. */
+	__le32 buffer; /* pointer to u8 buffer */
+	__le32 bufsize;
+	__le32 length;
+	__le32 count;
+	__le32 free;
+} __packed;
+
+struct ath10k_fw_dbglog_hdr {
+	__le32 dbuf; /* pointer to ath10k_fw_dbglog_buf */
+	__le32 dropped;
+} __packed;
+
 #endif /* _HW_H_ */
