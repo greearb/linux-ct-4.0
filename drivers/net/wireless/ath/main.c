@@ -71,6 +71,7 @@ EXPORT_SYMBOL(ath_is_mybeacon);
 void ath_printk(const char *level, const struct ath_common* common,
 		const char *fmt, ...)
 {
+	struct timeval tv;
 	struct va_format vaf;
 	va_list args;
 
@@ -79,12 +80,16 @@ void ath_printk(const char *level, const struct ath_common* common,
 	vaf.fmt = fmt;
 	vaf.va = &args;
 
+	do_gettimeofday(&tv);
+
 	if (common && common->hw && common->hw->wiphy) {
-		printk("%sath: %s: %pV",
-		       level, wiphy_name(common->hw->wiphy), &vaf);
+		printk("%sath: %lu.%lu %s: %pV",
+		       level, tv.tv_sec, tv.tv_usec,
+		       wiphy_name(common->hw->wiphy), &vaf);
 		trace_ath_log(common->hw->wiphy, &vaf);
 	} else {
-		printk("%sath: %pV", level, &vaf);
+		printk("%sath: %lu.%lu %pV",
+		       level, tv.tv_sec, tv.tv_usec, &vaf);
 	}
 
 	va_end(args);
