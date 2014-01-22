@@ -960,6 +960,17 @@ static int ath10k_core_init_firmware_features(struct ath10k *ar)
 		ar->htt.max_num_pending_tx = TARGET_NUM_MSDU_DESC;
 		break;
 	case ATH10K_FW_WMI_OP_VERSION_10_1:
+		if (test_bit(ATH10K_FW_FEATURE_WMI_10X_CT, ar->fw_features)) {
+			ar->max_num_peers = TARGET_10X_NUM_PEERS_CT;
+			ar->max_num_stations = TARGET_10X_NUM_STATIONS;
+			ar->max_num_vdevs = TARGET_10X_NUM_VDEVS_CT;
+		} else {
+			ar->max_num_peers = TARGET_10X_NUM_PEERS;
+			ar->max_num_stations = TARGET_10X_NUM_STATIONS;
+			ar->max_num_vdevs = TARGET_10X_NUM_VDEVS;
+		}
+		ar->htt.max_num_pending_tx = TARGET_10X_NUM_MSDU_DESC;
+		break;
 	case ATH10K_FW_WMI_OP_VERSION_10_2:
 	case ATH10K_FW_WMI_OP_VERSION_10_2_4:
 		ar->max_num_peers = TARGET_10X_NUM_PEERS;
