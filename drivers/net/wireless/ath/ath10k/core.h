@@ -619,6 +619,7 @@ struct ath10k {
 	unsigned int filter_flags;
 	unsigned long dev_flags;
 	u32 dfs_block_radar_events;
+	int install_key_rv; /* Store error code from key-install */
 
 	/* protected by conf_mutex */
 	bool radar_enabled;
