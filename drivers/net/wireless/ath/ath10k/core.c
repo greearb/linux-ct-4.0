@@ -387,6 +387,65 @@ static int ath10k_download_and_run_otp(struct ath10k *ar)
 
 	ath10k_dbg(ar, ATH10K_DBG_BOOT, "boot otp execute result %d\n", result);
 
+	/* If we are 'CT' firmware, then we have a back-door way to debug
+	 * the OTP binary since it does not have normal debuglog functionality.
+	 * Return code is: 0x8000000 | memory-address-of-debug-struct.
+	 * I doubt this is guaranteed to work..but it appears to work most of
+	 * the time so it's good enough for now.
+	 */
+	if (result & 0x8000000) {
+/*#define DEBUG_OTP */
+#define PRINTF_MSG_BUFLEN 1024
+#define OTP_DBG_BUFLEN 2048
+		struct otp_debug_ct {
+			char debug_msg[PRINTF_MSG_BUFLEN];
+			u32 real_ret_code;
+			u32 msg_len;
+			unsigned char otp[OTP_DBG_BUFLEN];
+			unsigned int otp_len;
+		};
+		struct otp_debug_ct *dbg = kzalloc(sizeof(*dbg), GFP_ATOMIC);
+		u32 targ_addr = result & ~0x8000000;
+#ifdef DEBUG_OTP
+		int ilen;
+		u32 *uiptr;
+		int i;
+#endif
+
+		if (!dbg) {
+			/* Assume real result is OK */
+			result = 0;
+			goto exit;
+		}
+
+		/* ath10k_err("otp debug location: 0x%x\n", targ_addr); */
+
+		ath10k_hif_read_target_mem(ar, targ_addr, dbg, sizeof(*dbg));
+#ifdef DEBUG_OTP
+		uiptr = (u32*)(&(dbg->otp[0]));
+
+		/* Verbose debugging messages from OTP run on firmware */
+		ath10k_err("otp debug: %s\n", dbg->debug_msg);
+		ath10k_err("otp real-ret-code: 0x%x\n", dbg->real_ret_code);
+		ath10k_err("otp msg-len: %i\n", dbg->msg_len);
+		ath10k_err("otp otp-len: %i\n", dbg->otp_len);
+		ath10k_err("otp data:\n");
+
+		ilen = min(dbg->otp_len, (unsigned int)(OTP_DBG_BUFLEN));
+		if (ilen & 0x3)
+			ilen += 4; /* make sure we read that last few bytes */
+		ilen = ilen / 4;
+		for (i = 0; i < ilen; i++) {
+			ath10k_err("otp [%04d]: %08X\n",
+				   i * 4,
+				   uiptr[i]);
+		}
+#endif
+		result = dbg->real_ret_code;
+		kfree(dbg);
+	}
+
+exit:
 	if (!skip_otp && result != 0) {
 		ath10k_err(ar, "otp calibration failed: %d", result);
 		return -EINVAL;
