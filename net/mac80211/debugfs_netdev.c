@@ -260,7 +260,7 @@ ieee80211_if_fmt_sta_hash(const struct ieee80211_sub_if_data *sdata,
 	mutex_unlock(&sdata->local->sta_mtx);
 	return res;
 }
-__IEEE80211_IF_FILE(sta_hash, NULL);
+IEEE80211_IF_FILE_R(sta_hash);
 
 /* STA attributes */
 IEEE80211_IF_FILE(bssid, u.mgd.bssid, MAC);
