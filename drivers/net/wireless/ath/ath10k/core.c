@@ -395,7 +395,7 @@ static int ath10k_download_and_run_otp(struct ath10k *ar)
 		return ret;
 	}
 
-	ret = ath10k_bmi_execute(ar, address, 0, &result);
+	ret = ath10k_bmi_execute(ar, address, 0x88888888, &result);
 	if (ret) {
 		ath10k_err(ar, "could not execute otp (%d)\n", ret);
 		return ret;
