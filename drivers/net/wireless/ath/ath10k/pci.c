@@ -1223,6 +1223,7 @@ static void ath10k_pci_fw_crashed_dump(struct ath10k *ar)
 {
 	struct ath10k_fw_crash_data *crash_data;
 	char uuid[50];
+	static char *env[] = { "DRIVER=ath10k", "EVENT=error_dump", NULL };
 
 	spin_lock_bh(&ar->data_lock);
 
@@ -1247,6 +1248,9 @@ static void ath10k_pci_fw_crashed_dump(struct ath10k *ar)
 		crash_data->crashed_since_read = true;
 
 	spin_unlock_bh(&ar->data_lock);
+
+	/* notify the userspace about the firmware crash */
+	kobject_uevent_env(&ar->hw->wiphy->dev.kobj, KOBJ_CHANGE, env);
 
 	queue_work(ar->workqueue, &ar->restart_work);
 }
