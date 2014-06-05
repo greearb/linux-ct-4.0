@@ -4323,6 +4323,7 @@ static void ath10k_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	struct ath10k *ar = hw->priv;
 	bool skip;
 	int ret;
+	u8 peer_addr[ETH_ALEN] = {0};
 
 	/* mac80211 doesn't care if we really xmit queued frames or not
 	 * we'll collect those frames either way if we stop/delete vdevs */
@@ -4333,6 +4334,12 @@ static void ath10k_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 
 	if (ar->state == ATH10K_STATE_WEDGED)
 		goto skip;
+
+	/* If we are CT firmware, ask it to flush all tids on all peers on
+	 * all vdevs.  Normal firmware will just crash if you do this.
+	 */
+	if (test_bit(ATH10K_FW_FEATURE_WMI_10X_CT, ar->fw_features))
+		ath10k_wmi_peer_flush(ar, 0xFFFFFFFF, peer_addr, 0xFFFFFFFF);
 
 	ret = wait_event_timeout(ar->htt.empty_tx_wq, ({
 			bool empty;
