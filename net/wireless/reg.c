@@ -774,6 +774,10 @@ static int reg_rules_intersect(const struct ieee80211_regdomain *rd1,
 	struct ieee80211_power_rule *power_rule;
 	u32 freq_diff, max_bandwidth1, max_bandwidth2;
 
+	pr_info("reg-rules-intersect, %c%c  %c%c\n",
+		rd1->alpha2[0], rd1->alpha2[1],
+		rd2->alpha2[0], rd2->alpha2[1]);
+
 	freq_range1 = &rule1->freq_range;
 	freq_range2 = &rule2->freq_range;
 	freq_range = &intersected_rule->freq_range;
@@ -906,8 +910,15 @@ regdom_intersect(const struct ieee80211_regdomain *rd1,
 	struct ieee80211_reg_rule intersected_rule;
 	struct ieee80211_regdomain *rd;
 
+	pr_info("regdom-intersect, rd1: %p  rd2: %p\n",
+		rd1, rd2);
+
 	if (!rd1 || !rd2)
 		return NULL;
+
+	pr_info("regdom-intersect, rd1: %c%c  rd2: %c%c\n",
+		rd1->alpha2[0], rd1->alpha2[1],
+		rd2->alpha2[0], rd2->alpha2[1]);
 
 	/*
 	 * First we get a count of the rules we'll need, then we actually
@@ -927,15 +938,19 @@ regdom_intersect(const struct ieee80211_regdomain *rd1,
 		}
 	}
 
-	if (!num_rules)
+	if (!num_rules) {
+		pr_info("regdom-intersect: num-rules is zero\n");
 		return NULL;
+	}
 
 	size_of_regd = sizeof(struct ieee80211_regdomain) +
 		       num_rules * sizeof(struct ieee80211_reg_rule);
 
 	rd = kzalloc(size_of_regd, GFP_KERNEL);
-	if (!rd)
+	if (!rd) {
+		pr_info("regdom-intersect: Could not allocate regd\n");
 		return NULL;
+	}
 
 	for (x = 0; x < rd1->n_reg_rules; x++) {
 		rule1 = &rd1->reg_rules[x];
@@ -2686,8 +2701,8 @@ bool reg_supported_dfs_region(enum nl80211_dfs_regions dfs_region)
 	case NL80211_DFS_JP:
 		return true;
 	default:
-		REG_DBG_PRINT("Ignoring uknown DFS master region: %d\n",
-			      dfs_region);
+		pr_info("Ignoring uknown DFS master region: %d\n",
+			dfs_region);
 		return false;
 	}
 }
@@ -2727,10 +2742,12 @@ static void print_regdomain(const struct ieee80211_regdomain *rd)
 	print_rd_rules(rd);
 }
 
-static void print_regdomain_info(const struct ieee80211_regdomain *rd)
+static void print_regdomain_info(const struct ieee80211_regdomain *rd, const char* dbg)
 {
-	pr_info("Regulatory domain: %c%c\n", rd->alpha2[0], rd->alpha2[1]);
+	pr_info("Regulatory domain (%s): %c%c  DFS: %s\n",
+		dbg, rd->alpha2[0], rd->alpha2[1], reg_dfs_region_str(rd->dfs_region));
 	print_rd_rules(rd);
+	pr_info("Done with reg domain\n\n");
 }
 
 static int reg_set_rd_core(const struct ieee80211_regdomain *rd)
@@ -2746,23 +2763,30 @@ static int reg_set_rd_user(const struct ieee80211_regdomain *rd,
 {
 	const struct ieee80211_regdomain *intersected_rd = NULL;
 
-	if (!regdom_changes(rd->alpha2))
+	pr_info("set-rd-user called...\n");
+
+	if (!regdom_changes(rd->alpha2)) {
+		pr_info("set-rd-user:  No change in reg-domain.\n");
 		return -EALREADY;
+	}
 
 	if (!is_valid_rd(rd)) {
 		pr_err("Invalid regulatory domain detected:\n");
-		print_regdomain_info(rd);
+		print_regdomain_info(rd, "set-rd-user, invalid regdomain");
 		return -EINVAL;
 	}
 
 	if (!user_request->intersect) {
+		pr_info("set-rd-user:  No intersect requested.\n");
 		reset_regdomains(false, rd);
 		return 0;
 	}
 
 	intersected_rd = regdom_intersect(rd, get_cfg80211_regdom());
-	if (!intersected_rd)
+	if (!intersected_rd) {
+		pr_info("set-rd-user:  regdom_intersect returned NULL.\n");
 		return -EINVAL;
+	}
 
 	kfree(rd);
 	rd = NULL;
@@ -2779,32 +2803,42 @@ static int reg_set_rd_driver(const struct ieee80211_regdomain *rd,
 	const struct ieee80211_regdomain *tmp;
 	struct wiphy *request_wiphy;
 
-	if (is_world_regdom(rd->alpha2))
+	if (is_world_regdom(rd->alpha2)) {
+		pr_info("set-rd-driver, rd is WORLD.\n");
 		return -EINVAL;
+	}
 
-	if (!regdom_changes(rd->alpha2))
+	if (!regdom_changes(rd->alpha2)) {
+		pr_info("set-rd-driver, no change.\n");
 		return -EALREADY;
+	}
 
 	if (!is_valid_rd(rd)) {
 		pr_err("Invalid regulatory domain detected:\n");
-		print_regdomain_info(rd);
+		print_regdomain_info(rd, "set-rd-driver, invalid domain");
 		return -EINVAL;
 	}
 
 	request_wiphy = wiphy_idx_to_wiphy(driver_request->wiphy_idx);
 	if (!request_wiphy) {
+		pr_info("set-rd-driver:  Cannot find request wiphy.\n");
 		queue_delayed_work(system_power_efficient_wq,
 				   &reg_timeout, 0);
 		return -ENODEV;
 	}
 
 	if (!driver_request->intersect) {
-		if (request_wiphy->regd)
+		pr_info("set-rd-driver, no intersect requested.\n");
+		if (request_wiphy->regd) {
+			pr_info("set-rd-driver, no intersect, has rd already.\n");
 			return -EALREADY;
+		}
 
 		regd = reg_copy_regd(rd);
-		if (IS_ERR(regd))
+		if (IS_ERR(regd)) {
+			pr_info("set-rd-driver, no intersect, copy failed.\n");
 			return PTR_ERR(regd);
+		}
 
 		rcu_assign_pointer(request_wiphy->regd, regd);
 		reset_regdomains(false, rd);
@@ -2848,7 +2882,7 @@ static int reg_set_rd_country_ie(const struct ieee80211_regdomain *rd,
 
 	if (!is_valid_rd(rd)) {
 		pr_err("Invalid regulatory domain detected:\n");
-		print_regdomain_info(rd);
+		print_regdomain_info(rd, "set-rd-country-ie, invalid regdomain");
 		return -EINVAL;
 	}
 
@@ -2883,6 +2917,10 @@ int set_regdom(const struct ieee80211_regdomain *rd)
 	}
 
 	lr = get_last_request();
+
+	pr_info("set-regdom, lr->initiator: %d domain: %c%c\n",
+		lr->initiator, rd->alpha2[0], rd->alpha2[1]);
+	print_regdomain_info(rd, "set-regdom");
 
 	/* Note that this doesn't update the wiphys, this is done below */
 	switch (lr->initiator) {
@@ -2949,7 +2987,7 @@ static int __regulatory_set_wiphy_regd(struct wiphy *wiphy,
 		return -EPERM;
 
 	if (WARN(!is_valid_rd(rd), "Invalid regulatory domain detected\n")) {
-		print_regdomain_info(rd);
+		print_regdomain_info(rd, "invalid regulatory detected");
 		return -EINVAL;
 	}
 
