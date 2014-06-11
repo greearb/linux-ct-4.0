@@ -6320,32 +6320,48 @@ static int nl80211_start_radar_detection(struct sk_buff *skb,
 	int err;
 
 	dfs_region = reg_get_dfs_region(wdev->wiphy);
-	if (dfs_region == NL80211_DFS_UNSET)
+	if (dfs_region == NL80211_DFS_UNSET) {
+		pr_err("start-radar: dfs_region == DFS_UNSET\n");
 		return -EINVAL;
+	}
 
 	err = nl80211_parse_chandef(rdev, info, &chandef);
-	if (err)
+	if (err) {
+		pr_err("start-radar: parse-chandef failed\n");
 		return err;
+	}
 
-	if (netif_carrier_ok(dev))
+	if (netif_carrier_ok(dev)) {
+		pr_err("start-radar: carrier-ok\n");
 		return -EBUSY;
+	}
 
-	if (wdev->cac_started)
+	if (wdev->cac_started) {
+		pr_err("start-radar: cac-started\n");
 		return -EBUSY;
+	}
 
 	err = cfg80211_chandef_dfs_required(wdev->wiphy, &chandef,
 					    wdev->iftype);
-	if (err < 0)
+	if (err < 0) {
+		pr_err("start-radar: dfs-required\n");
 		return err;
+	}
 
-	if (err == 0)
+	if (err == 0) {
+		pr_err("start-radar: dfs-required (err == 0)\n");
 		return -EINVAL;
+	}
 
-	if (!cfg80211_chandef_dfs_usable(wdev->wiphy, &chandef))
+	if (!cfg80211_chandef_dfs_usable(wdev->wiphy, &chandef)) {
+		pr_err("start-radar: dfs not usable\n");
 		return -EINVAL;
+	}
 
-	if (!rdev->ops->start_radar_detection)
+	if (!rdev->ops->start_radar_detection) {
+		pr_err("start-radar: ops not available\n");
 		return -EOPNOTSUPP;
+	}
 
 	cac_time_ms = cfg80211_chandef_dfs_cac_time(&rdev->wiphy, &chandef);
 	if (WARN_ON(!cac_time_ms))
@@ -6358,7 +6374,11 @@ static int nl80211_start_radar_detection(struct sk_buff *skb,
 		wdev->cac_started = true;
 		wdev->cac_start_time = jiffies;
 		wdev->cac_time_ms = cac_time_ms;
+	} else {
+		pr_err("start-radar: ops->start-radar-detection failed: %i\n",
+		       err);
 	}
+
 	return err;
 }
 
