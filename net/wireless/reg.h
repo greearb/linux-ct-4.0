@@ -33,7 +33,7 @@ void wiphy_regulatory_deregister(struct wiphy *wiphy);
 int __init regulatory_init(void);
 void regulatory_exit(void);
 
-int set_regdom(const struct ieee80211_regdomain *rd);
+int set_regdom(struct ieee80211_regdomain *rd);
 unsigned int reg_get_max_bandwidth(const struct ieee80211_regdomain *rd,
 				   const struct ieee80211_reg_rule *rule);
 

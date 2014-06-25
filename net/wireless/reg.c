@@ -981,6 +981,10 @@ regdom_intersect(const struct ieee80211_regdomain *rd1,
 	rd->alpha2[1] = '8';
 	rd->dfs_region = reg_intersect_dfs_region(rd1->dfs_region,
 						  rd2->dfs_region);
+	pr_info("Setting DFS Master region from intersect: %s (on rd: %p) rd1: %s (%p)  rd2: %s (%p)\n",
+		reg_dfs_region_str(rd->dfs_region), rd,
+		reg_dfs_region_str(rd1->dfs_region), rd1,
+		reg_dfs_region_str(rd2->dfs_region), rd2);
 
 	return rd;
 }
@@ -1679,6 +1683,10 @@ static void wiphy_update_regulatory(struct wiphy *wiphy,
 		return;
 	}
 
+	pr_info("Setting DFS Master region in update_regulatory, was: %s, new: %s  lr: %p  regdom: %p\n",
+		reg_dfs_region_str(lr->dfs_region),
+		reg_dfs_region_str(get_cfg80211_regdom()->dfs_region),
+		lr, get_cfg80211_regdom());
 	lr->dfs_region = get_cfg80211_regdom()->dfs_region;
 
 	for (band = 0; band < IEEE80211_NUM_BANDS; band++)
@@ -2912,7 +2920,7 @@ static int reg_set_rd_country_ie(const struct ieee80211_regdomain *rd,
  * multiple drivers can be ironed out later. Caller must've already
  * kmalloc'd the rd structure.
  */
-int set_regdom(const struct ieee80211_regdomain *rd)
+int set_regdom(struct ieee80211_regdomain *rd)
 {
 	struct regulatory_request *lr;
 	bool user_reset = false;
@@ -2927,6 +2935,13 @@ int set_regdom(const struct ieee80211_regdomain *rd)
 
 	pr_info("set-regdom, lr->initiator: %d domain: %c%c\n",
 		lr->initiator, rd->alpha2[0], rd->alpha2[1]);
+	if (rd->alpha2[0] == 'U' &&
+	    rd->alpha2[1] == 'S' &&
+	    rd->dfs_region != NL80211_DFS_FCC) {
+		pr_info("Forcing US to DFS-FCC (was: %s).\n",
+			reg_dfs_region_str(rd->dfs_region));
+		rd->dfs_region = NL80211_DFS_FCC;
+	}
 	print_regdomain_info(rd, "set-regdom");
 
 	/* Note that this doesn't update the wiphys, this is done below */
