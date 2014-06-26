@@ -37,6 +37,9 @@
 int ath10k_modparam_nohwcrypt;
 module_param_named(nohwcrypt, ath10k_modparam_nohwcrypt, int, 0444);
 MODULE_PARM_DESC(nohwcrypt, "Disable hardware rx decrypt feature");
+int ath10k_modparam_target_num_vdevs_ct = DEF_TARGET_10X_NUM_VDEVS_CT;
+module_param_named(num_vdevs_ct, ath10k_modparam_target_num_vdevs_ct, int, 0444);
+MODULE_PARM_DESC(num_vdevs_ct, "Maximum vdevs to request from firmware");
 
 /**********/
 /* Crypto */
@@ -5158,9 +5161,9 @@ static const struct ieee80211_iface_limit ath10k_10x_if_limits[] = {
 	},
 };
 
-static const struct ieee80211_iface_limit ath10k_10x_ct_if_limits[] = {
+static struct ieee80211_iface_limit ath10k_10x_ct_if_limits[] = {
 	{
-	.max	= TARGET_10X_NUM_VDEVS_CT,
+	.max	= DEF_TARGET_10X_NUM_VDEVS_CT,
 	.types	= BIT(NL80211_IFTYPE_STATION)
 		| BIT(NL80211_IFTYPE_P2P_CLIENT)
 	},
@@ -5174,7 +5177,7 @@ static const struct ieee80211_iface_limit ath10k_10x_ct_if_limits[] = {
 	},
 };
 
-static const struct ieee80211_iface_combination ath10k_if_comb[] = {
+static struct ieee80211_iface_combination ath10k_if_comb[] = {
 	{
 		.limits = ath10k_if_limits,
 		.n_limits = ARRAY_SIZE(ath10k_if_limits),
@@ -5184,7 +5187,7 @@ static const struct ieee80211_iface_combination ath10k_if_comb[] = {
 	},
 };
 
-static const struct ieee80211_iface_combination ath10k_10x_if_comb[] = {
+static struct ieee80211_iface_combination ath10k_10x_if_comb[] = {
 	{
 		.limits = ath10k_10x_if_limits,
 		.n_limits = ARRAY_SIZE(ath10k_10x_if_limits),
@@ -5200,11 +5203,11 @@ static const struct ieee80211_iface_combination ath10k_10x_if_comb[] = {
 	},
 };
 
-static const struct ieee80211_iface_combination ath10k_10x_ct_if_comb[] = {
+static struct ieee80211_iface_combination ath10k_10x_ct_if_comb[] = {
 	{
 		.limits = ath10k_10x_ct_if_limits,
 		.n_limits = ARRAY_SIZE(ath10k_10x_ct_if_limits),
-		.max_interfaces = TARGET_10X_NUM_VDEVS_CT,
+		.max_interfaces = DEF_TARGET_10X_NUM_VDEVS_CT,
 		.num_different_channels = 1,
 		.beacon_int_infra_match = true,
 #ifdef CONFIG_ATH10K_DFS_CERTIFIED
@@ -5473,7 +5476,13 @@ int ath10k_mac_register(struct ath10k *ar)
 		break;
 	case ATH10K_FW_WMI_OP_VERSION_10_1:
 		if (test_bit(ATH10K_FW_FEATURE_WMI_10X_CT, ar->fw_features)) {
-			ar->hw->wiphy->iface_combinations = ath10k_10x_ct_if_comb;
+			ath10k_10x_ct_if_comb[0].limits[0].max =
+				ar->max_num_vdevs;
+			ath10k_10x_ct_if_comb[0].max_interfaces =
+				ar->max_num_vdevs;
+
+			ar->hw->wiphy->iface_combinations =
+				ath10k_10x_ct_if_comb;
 			ar->hw->wiphy->n_iface_combinations =
 				ARRAY_SIZE(ath10k_10x_ct_if_comb);
 		} else {
