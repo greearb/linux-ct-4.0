@@ -1177,6 +1177,12 @@ static void ath10k_htt_rx_h_undecap(struct ath10k *ar,
 	decap = MS(__le32_to_cpu(rxd->msdu_start.info1),
 		   RX_MSDU_START_INFO1_DECAP_FORMAT);
 
+	/*
+	  ath10k_dbg(ar, ATH10K_DBG_HTT,
+		   "rx-undecap: msdu-len: %d  decap: %d  ip-summed: %d decrypted: %d enctype: %d\n",
+		   msdu->len, decap, msdu->ip_summed, is_decrypted, enctype);
+	*/
+
 	switch (decap) {
 	case RX_MSDU_DECAP_RAW:
 		ath10k_htt_rx_h_undecap_raw(ar, msdu, status, enctype,
@@ -1310,6 +1316,12 @@ static void ath10k_htt_rx_h_mpdu(struct ath10k *ar,
 				RX_FLAG_IV_STRIPPED |
 				RX_FLAG_MMIC_STRIPPED;
 
+	/*
+	ath10k_dbg(ar, ATH10K_DBG_HTT,
+		   "rx-mpdu: first-len: %d  fcs-err: %i  tkip-err: %i decrypted: %i crypto-err: %i  peer-idx-inval: %i  enctype: %i\n",
+		   first->len, has_fcs_err, has_tkip_err, is_decrypted, has_crypto_err,
+		   has_peer_idx_invalid, enctype);
+	*/
 	skb_queue_walk(amsdu, msdu) {
 		ath10k_htt_rx_h_csum_offload(msdu);
 		ath10k_htt_rx_h_undecap(ar, msdu, status, first_hdr, enctype,
