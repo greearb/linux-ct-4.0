@@ -50,6 +50,7 @@ enum {
 	NEIGH_VAR_PROXY_QLEN,
 	NEIGH_VAR_ANYCAST_DELAY,
 	NEIGH_VAR_PROXY_DELAY,
+	NEIGH_VAR_RETRANS_RAND_BACKOFF,
 	NEIGH_VAR_LOCKTIME,
 #define NEIGH_VAR_DATA_MAX (NEIGH_VAR_LOCKTIME + 1)
 	/* Following are used as a second way to access one of the above */

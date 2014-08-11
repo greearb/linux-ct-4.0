@@ -282,6 +282,7 @@ static const struct bin_table bin_net_neigh_vars_table[] = {
 	{ CTL_INT,	NET_NEIGH_GC_THRESH3,		"gc_thresh3" },
 	{ CTL_INT,	NET_NEIGH_RETRANS_TIME_MS,	"retrans_time_ms" },
 	{ CTL_INT,	NET_NEIGH_REACHABLE_TIME_MS,	"base_reachable_time_ms" },
+	{ CTL_INT,	NET_NEIGH_RETRANS_RAND_BACKOFF,	"retrans_rand_backoff_ms" },
 	{}
 };
 
