@@ -34,10 +34,15 @@
  * enum ath10k_fw_crash_dump_type - types of data in the dump file
  * @ATH10K_FW_CRASH_DUMP_REGDUMP: Register crash dump in binary format
  * @ATH10K_FW_ERROR_DUMP_DBGLOG:  Recent firmware debug log entries
+ * @ATH10K_FW_CRASH_DUMP_STACK:   Stack memory contents.
+ * @ATH10K_FW_CRASH_DUMP_EXC_STACK:   Exception stack memory contents.
  */
 enum ath10k_fw_crash_dump_type {
 	ATH10K_FW_CRASH_DUMP_REGISTERS = 0,
 	ATH10K_FW_CRASH_DUMP_DBGLOG = 1,
+	ATH10K_FW_CRASH_DUMP_STACK = 2,
+	ATH10K_FW_CRASH_DUMP_EXC_STACK = 3,
+
 	ATH10K_FW_CRASH_DUMP_MAX,
 };
 
@@ -101,8 +106,11 @@ struct ath10k_dump_file_data {
 	/* VERMAGIC_STRING */
 	char kernel_ver[64];
 
+	__le32 stack_addr;
+	__le32 exc_stack_addr;
+
 	/* room for growth w/out changing binary format */
-	u8 unused[128];
+	u8 unused[120];
 
 	/* struct ath10k_tlv_dump_data + more */
 	u8 data[0];
@@ -901,6 +909,8 @@ static struct ath10k_dump_file_data *ath10k_build_dump_file(struct ath10k *ar)
 	len = hdr_len;
 	len += sizeof(*dump_tlv) + sizeof(crash_data->registers);
 	len += sizeof(*dump_tlv) + sizeof(ar->debug.dbglog_entry_data);
+	len += sizeof(*dump_tlv) + sizeof(crash_data->stack_buf);
+	len += sizeof(*dump_tlv) + sizeof(crash_data->exc_stack_buf);
 
 	sofar += hdr_len;
 
@@ -940,6 +950,8 @@ static struct ath10k_dump_file_data *ath10k_build_dump_file(struct ath10k *ar)
 	dump_data->ht_cap_info = cpu_to_le32(ar->ht_cap_info);
 	dump_data->vht_cap_info = cpu_to_le32(ar->vht_cap_info);
 	dump_data->num_rf_chains = cpu_to_le32(ar->num_rf_chains);
+	dump_data->stack_addr = cpu_to_le32(crash_data->stack_addr);
+	dump_data->exc_stack_addr = cpu_to_le32(crash_data->exc_stack_addr);
 
 	strlcpy(dump_data->fw_ver, ar->hw->wiphy->fw_version,
 		sizeof(dump_data->fw_ver));
@@ -972,7 +984,22 @@ static struct ath10k_dump_file_data *ath10k_build_dump_file(struct ath10k *ar)
 		cpu_to_le32(ar->debug.dbglog_entry_data.head_idx);
 	dbglog_storage->tail_idx =
 		cpu_to_le32(ar->debug.dbglog_entry_data.tail_idx);
+	sofar += sizeof(*dump_tlv) + tmp;
 
+	/* Gather firmware stack dump */
+	tmp = sizeof(crash_data->stack_buf);
+	dump_tlv = (struct ath10k_tlv_dump_data *)(buf + sofar);
+	dump_tlv->type = cpu_to_le32(ATH10K_FW_CRASH_DUMP_STACK);
+	dump_tlv->tlv_len = cpu_to_le32(tmp);
+	memcpy(dump_tlv->tlv_data, crash_data->stack_buf, tmp);
+	sofar += sizeof(*dump_tlv) + tmp;
+
+	/* Gather firmware exception stack dump */
+	tmp = sizeof(crash_data->exc_stack_buf);
+	dump_tlv = (struct ath10k_tlv_dump_data *)(buf + sofar);
+	dump_tlv->type = cpu_to_le32(ATH10K_FW_CRASH_DUMP_EXC_STACK);
+	dump_tlv->tlv_len = cpu_to_le32(tmp);
+	memcpy(dump_tlv->tlv_data, crash_data->exc_stack_buf, tmp);
 	sofar += sizeof(*dump_tlv) + tmp;
 
 	ar->debug.fw_crash_data->crashed_since_read = false;
