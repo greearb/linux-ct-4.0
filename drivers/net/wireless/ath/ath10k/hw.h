@@ -106,6 +106,8 @@ enum ath10k_fw_ie_type {
 	 * FW API 4 and above.
 	 */
 	ATH10K_FW_IE_WMI_OP_VERSION = 5,
+
+	ATH10K_FW_IE_BSS_INFO_CT = 30,
 };
 
 enum ath10k_fw_wmi_op_version {
