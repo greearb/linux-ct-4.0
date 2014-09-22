@@ -170,5 +170,7 @@ static inline void ath10k_dbg_save_fw_dbg_buffer(struct ath10k *ar,
 #endif /* CONFIG_ATH10K_DEBUG */
 
 int ath10k_refresh_peer_stats(struct ath10k *ar);
+void ath10k_dbg_print_fw_dbg_buffer(struct ath10k *ar, __le32 *buffer,
+				    int len, const char* lvl);
 
 #endif /* _DEBUG_H_ */
