@@ -2138,8 +2138,13 @@ static void ath10k_regd_update(struct ath10k *ar)
 	if (config_enabled(CONFIG_ATH10K_DFS_CERTIFIED) && ar->dfs_detector) {
 		nl_dfs_reg = ar->dfs_detector->region;
 		wmi_dfs_reg = ath10k_mac_get_dfs_region(nl_dfs_reg);
+		ath10k_dbg(ar, ATH10K_DBG_REGULATORY,
+			   "nl_dfs_reg: %i  wmi_dfs_reg: %i\n",
+			    nl_dfs_reg, wmi_dfs_reg);
 	} else {
 		wmi_dfs_reg = WMI_UNINIT_DFS_DOMAIN;
+		ath10k_dbg(ar, ATH10K_DBG_REGULATORY,
+			   "not DFS_CERTIFIED or no dfs_detector.\n");
 	}
 
 	/* Target allows setting up per-band regdomain but ath_common provides
