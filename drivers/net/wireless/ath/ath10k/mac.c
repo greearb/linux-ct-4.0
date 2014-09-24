@@ -2677,6 +2677,92 @@ void ath10k_halt(struct ath10k *ar)
 	spin_unlock_bh(&ar->data_lock);
 }
 
+static struct ieee80211_sta_vht_cap ath10k_create_vht_cap(struct ath10k *ar)
+{
+	struct ieee80211_sta_vht_cap vht_cap = {0};
+	u16 mcs_map;
+	int i;
+
+	vht_cap.vht_supported = 1;
+	vht_cap.cap = ar->vht_cap_info;
+
+	mcs_map = 0;
+	for (i = 0; i < 8; i++) {
+		if (i < ar->num_rf_chains)
+			mcs_map |= IEEE80211_VHT_MCS_SUPPORT_0_9 << (i*2);
+		else
+			mcs_map |= IEEE80211_VHT_MCS_NOT_SUPPORTED << (i*2);
+	}
+
+	vht_cap.vht_mcs.rx_mcs_map = cpu_to_le16(mcs_map);
+	vht_cap.vht_mcs.tx_mcs_map = cpu_to_le16(mcs_map);
+
+	return vht_cap;
+}
+
+static struct ieee80211_sta_ht_cap ath10k_get_ht_cap(struct ath10k *ar)
+{
+	int i;
+	struct ieee80211_sta_ht_cap ht_cap = {0};
+
+	if (!(ar->ht_cap_info & WMI_HT_CAP_ENABLED))
+		return ht_cap;
+
+	ht_cap.ht_supported = 1;
+	ht_cap.ampdu_factor = IEEE80211_HT_MAX_AMPDU_64K;
+	ht_cap.ampdu_density = IEEE80211_HT_MPDU_DENSITY_8;
+	ht_cap.cap |= IEEE80211_HT_CAP_SUP_WIDTH_20_40;
+	ht_cap.cap |= IEEE80211_HT_CAP_DSSSCCK40;
+	ht_cap.cap |= WLAN_HT_CAP_SM_PS_STATIC << IEEE80211_HT_CAP_SM_PS_SHIFT;
+
+	if (ar->ht_cap_info & WMI_HT_CAP_HT20_SGI)
+		ht_cap.cap |= IEEE80211_HT_CAP_SGI_20;
+
+	if (ar->ht_cap_info & WMI_HT_CAP_HT40_SGI)
+		ht_cap.cap |= IEEE80211_HT_CAP_SGI_40;
+
+	if (ar->ht_cap_info & WMI_HT_CAP_DYNAMIC_SMPS) {
+		u32 smps;
+
+		smps   = WLAN_HT_CAP_SM_PS_DYNAMIC;
+		smps <<= IEEE80211_HT_CAP_SM_PS_SHIFT;
+
+		ht_cap.cap |= smps;
+	}
+
+	if (ar->ht_cap_info & WMI_HT_CAP_TX_STBC)
+		ht_cap.cap |= IEEE80211_HT_CAP_TX_STBC;
+
+	if (ar->ht_cap_info & WMI_HT_CAP_RX_STBC) {
+		u32 stbc;
+
+		stbc   = ar->ht_cap_info;
+		stbc  &= WMI_HT_CAP_RX_STBC;
+		stbc >>= WMI_HT_CAP_RX_STBC_MASK_SHIFT;
+		stbc <<= IEEE80211_HT_CAP_RX_STBC_SHIFT;
+		stbc  &= IEEE80211_HT_CAP_RX_STBC;
+
+		ht_cap.cap |= stbc;
+	}
+
+	if (ar->ht_cap_info & WMI_HT_CAP_LDPC)
+		ht_cap.cap |= IEEE80211_HT_CAP_LDPC_CODING;
+
+	if (ar->ht_cap_info & WMI_HT_CAP_L_SIG_TXOP_PROT)
+		ht_cap.cap |= IEEE80211_HT_CAP_LSIG_TXOP_PROT;
+
+	/* max AMSDU is implicitly taken from vht_cap_info */
+	if (ar->vht_cap_info & WMI_VHT_CAP_MAX_MPDU_LEN_MASK)
+		ht_cap.cap |= IEEE80211_HT_CAP_MAX_AMSDU;
+
+	for (i = 0; i < ar->num_rf_chains; i++)
+		ht_cap.mcs.rx_mask[i] = 0xFF;
+
+	ht_cap.mcs.tx_params |= IEEE80211_HT_MCS_TX_DEFINED;
+
+	return ht_cap;
+}
+
 static int ath10k_get_antenna(struct ieee80211_hw *hw, u32 *tx_ant, u32 *rx_ant)
 {
 	struct ath10k *ar = hw->priv;
@@ -5218,92 +5304,6 @@ static struct ieee80211_iface_combination ath10k_10x_ct_if_comb[] = {
 #endif
 	},
 };
-
-static struct ieee80211_sta_vht_cap ath10k_create_vht_cap(struct ath10k *ar)
-{
-	struct ieee80211_sta_vht_cap vht_cap = {0};
-	u16 mcs_map;
-	int i;
-
-	vht_cap.vht_supported = 1;
-	vht_cap.cap = ar->vht_cap_info;
-
-	mcs_map = 0;
-	for (i = 0; i < 8; i++) {
-		if (i < ar->num_rf_chains)
-			mcs_map |= IEEE80211_VHT_MCS_SUPPORT_0_9 << (i*2);
-		else
-			mcs_map |= IEEE80211_VHT_MCS_NOT_SUPPORTED << (i*2);
-	}
-
-	vht_cap.vht_mcs.rx_mcs_map = cpu_to_le16(mcs_map);
-	vht_cap.vht_mcs.tx_mcs_map = cpu_to_le16(mcs_map);
-
-	return vht_cap;
-}
-
-static struct ieee80211_sta_ht_cap ath10k_get_ht_cap(struct ath10k *ar)
-{
-	int i;
-	struct ieee80211_sta_ht_cap ht_cap = {0};
-
-	if (!(ar->ht_cap_info & WMI_HT_CAP_ENABLED))
-		return ht_cap;
-
-	ht_cap.ht_supported = 1;
-	ht_cap.ampdu_factor = IEEE80211_HT_MAX_AMPDU_64K;
-	ht_cap.ampdu_density = IEEE80211_HT_MPDU_DENSITY_8;
-	ht_cap.cap |= IEEE80211_HT_CAP_SUP_WIDTH_20_40;
-	ht_cap.cap |= IEEE80211_HT_CAP_DSSSCCK40;
-	ht_cap.cap |= WLAN_HT_CAP_SM_PS_STATIC << IEEE80211_HT_CAP_SM_PS_SHIFT;
-
-	if (ar->ht_cap_info & WMI_HT_CAP_HT20_SGI)
-		ht_cap.cap |= IEEE80211_HT_CAP_SGI_20;
-
-	if (ar->ht_cap_info & WMI_HT_CAP_HT40_SGI)
-		ht_cap.cap |= IEEE80211_HT_CAP_SGI_40;
-
-	if (ar->ht_cap_info & WMI_HT_CAP_DYNAMIC_SMPS) {
-		u32 smps;
-
-		smps   = WLAN_HT_CAP_SM_PS_DYNAMIC;
-		smps <<= IEEE80211_HT_CAP_SM_PS_SHIFT;
-
-		ht_cap.cap |= smps;
-	}
-
-	if (ar->ht_cap_info & WMI_HT_CAP_TX_STBC)
-		ht_cap.cap |= IEEE80211_HT_CAP_TX_STBC;
-
-	if (ar->ht_cap_info & WMI_HT_CAP_RX_STBC) {
-		u32 stbc;
-
-		stbc   = ar->ht_cap_info;
-		stbc  &= WMI_HT_CAP_RX_STBC;
-		stbc >>= WMI_HT_CAP_RX_STBC_MASK_SHIFT;
-		stbc <<= IEEE80211_HT_CAP_RX_STBC_SHIFT;
-		stbc  &= IEEE80211_HT_CAP_RX_STBC;
-
-		ht_cap.cap |= stbc;
-	}
-
-	if (ar->ht_cap_info & WMI_HT_CAP_LDPC)
-		ht_cap.cap |= IEEE80211_HT_CAP_LDPC_CODING;
-
-	if (ar->ht_cap_info & WMI_HT_CAP_L_SIG_TXOP_PROT)
-		ht_cap.cap |= IEEE80211_HT_CAP_LSIG_TXOP_PROT;
-
-	/* max AMSDU is implicitly taken from vht_cap_info */
-	if (ar->vht_cap_info & WMI_VHT_CAP_MAX_MPDU_LEN_MASK)
-		ht_cap.cap |= IEEE80211_HT_CAP_MAX_AMSDU;
-
-	for (i = 0; i < ar->num_rf_chains; i++)
-		ht_cap.mcs.rx_mask[i] = 0xFF;
-
-	ht_cap.mcs.tx_params |= IEEE80211_HT_MCS_TX_DEFINED;
-
-	return ht_cap;
-}
 
 static void ath10k_get_arvif_iter(void *data, u8 *mac,
 				  struct ieee80211_vif *vif)
