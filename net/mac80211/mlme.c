@@ -4500,8 +4500,9 @@ int ieee80211_mgd_auth(struct ieee80211_sub_if_data *sdata,
 	{
 		struct timeval tv;
 		do_gettimeofday(&tv);
-		sdata_info(sdata, "authenticate with %pM at: %lu.%lu\n",
-			   req->bss->bssid, tv.tv_sec, tv.tv_usec);
+		sdata_info(sdata, "%pM authenticate with %pM at: %lu.%lu\n",
+			   sdata->dev->dev_addr, req->bss->bssid,
+			   tv.tv_sec, tv.tv_usec);
 	}
 
 	err = ieee80211_prep_connection(sdata, req->bss, false);
