@@ -1922,8 +1922,10 @@ static int nl80211_parse_chandef(struct cfg80211_registered_device *rdev,
 {
 	u32 control_freq;
 
-	if (!info->attrs[NL80211_ATTR_WIPHY_FREQ])
+	if (!info->attrs[NL80211_ATTR_WIPHY_FREQ]) {
+		pr_err("parse-chandef:  no FREQ defined.\n");
 		return -EINVAL;
+	}
 
 	control_freq = nla_get_u32(info->attrs[NL80211_ATTR_WIPHY_FREQ]);
 
@@ -1933,8 +1935,11 @@ static int nl80211_parse_chandef(struct cfg80211_registered_device *rdev,
 	chandef->center_freq2 = 0;
 
 	/* Primary channel not allowed */
-	if (!chandef->chan || chandef->chan->flags & IEEE80211_CHAN_DISABLED)
+	if (!chandef->chan || chandef->chan->flags & IEEE80211_CHAN_DISABLED) {
+		pr_err("parse-chandef: Primary channel not allowed: chan: %p  freq: %d\n",
+		       chandef->chan, control_freq);
 		return -EINVAL;
+	}
 
 	if (info->attrs[NL80211_ATTR_WIPHY_CHANNEL_TYPE]) {
 		enum nl80211_channel_type chantype;
@@ -1951,6 +1956,8 @@ static int nl80211_parse_chandef(struct cfg80211_registered_device *rdev,
 						chantype);
 			break;
 		default:
+			pr_err("parse-chandef, invalid chantype: %d\n",
+			       chantype);
 			return -EINVAL;
 		}
 	} else if (info->attrs[NL80211_ATTR_CHANNEL_WIDTH]) {
@@ -1966,17 +1973,23 @@ static int nl80211_parse_chandef(struct cfg80211_registered_device *rdev,
 					info->attrs[NL80211_ATTR_CENTER_FREQ2]);
 	}
 
-	if (!cfg80211_chandef_valid(chandef))
+	if (!cfg80211_chandef_valid(chandef)) {
+		pr_err("parse-chandef:  chandef is not valid\n");
 		return -EINVAL;
+	}
 
 	if (!cfg80211_chandef_usable(&rdev->wiphy, chandef,
-				     IEEE80211_CHAN_DISABLED))
+				     IEEE80211_CHAN_DISABLED)) {
+		pr_err("parse-chandef: chandef is not usable.\n");
 		return -EINVAL;
+	}
 
 	if ((chandef->width == NL80211_CHAN_WIDTH_5 ||
 	     chandef->width == NL80211_CHAN_WIDTH_10) &&
-	    !(rdev->wiphy.flags & WIPHY_FLAG_SUPPORTS_5_10_MHZ))
+	    !(rdev->wiphy.flags & WIPHY_FLAG_SUPPORTS_5_10_MHZ)) {
+		pr_err("parse-chandef:  5/10 Mhz is not supported.\n");
 		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -7259,35 +7272,49 @@ static int nl80211_join_ibss(struct sk_buff *skb, struct genl_info *info)
 
 	memset(&ibss, 0, sizeof(ibss));
 
-	if (!is_valid_ie_attr(info->attrs[NL80211_ATTR_IE]))
+	if (!is_valid_ie_attr(info->attrs[NL80211_ATTR_IE])) {
+		pr_err("join-ibss:  ATTR_IE is not valid.\n");
 		return -EINVAL;
+	}
 
 	if (!info->attrs[NL80211_ATTR_SSID] ||
-	    !nla_len(info->attrs[NL80211_ATTR_SSID]))
+	    !nla_len(info->attrs[NL80211_ATTR_SSID])) {
+		pr_err("join-ibss: ATTR_SSID is not valid.\n");
 		return -EINVAL;
+	}
 
 	ibss.beacon_interval = 100;
 
 	if (info->attrs[NL80211_ATTR_BEACON_INTERVAL]) {
 		ibss.beacon_interval =
 			nla_get_u32(info->attrs[NL80211_ATTR_BEACON_INTERVAL]);
-		if (ibss.beacon_interval < 1 || ibss.beacon_interval > 10000)
+		if (ibss.beacon_interval < 1 || ibss.beacon_interval > 10000) {
+			pr_err("join-ibss: Beacon interval is bad: %d\n",
+			       ibss.beacon_interval);
 			return -EINVAL;
+		}
 	}
 
-	if (!rdev->ops->join_ibss)
+	if (!rdev->ops->join_ibss) {
+		pr_err("join-ibss:  no join_ibss ops in driver.\n");
 		return -EOPNOTSUPP;
+	}
 
-	if (dev->ieee80211_ptr->iftype != NL80211_IFTYPE_ADHOC)
+	if (dev->ieee80211_ptr->iftype != NL80211_IFTYPE_ADHOC) {
+		pr_err("join-ibss: iftype is invalid.\n");
 		return -EOPNOTSUPP;
+	}
 
 	wiphy = &rdev->wiphy;
 
 	if (info->attrs[NL80211_ATTR_MAC]) {
 		ibss.bssid = nla_data(info->attrs[NL80211_ATTR_MAC]);
 
-		if (!is_valid_ether_addr(ibss.bssid))
+		if (!is_valid_ether_addr(ibss.bssid)) {
+			pr_err("join-ibss: ibss bssid is invalid: %pM\n",
+			       ibss.bssid);
 			return -EINVAL;
+		}
 	}
 	ibss.ssid = nla_data(info->attrs[NL80211_ATTR_SSID]);
 	ibss.ssid_len = nla_len(info->attrs[NL80211_ATTR_SSID]);
@@ -7298,12 +7325,16 @@ static int nl80211_join_ibss(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	err = nl80211_parse_chandef(rdev, info, &ibss.chandef);
-	if (err)
+	if (err) {
+		pr_err("join-ibss:  parse-chandef fails.\n");
 		return err;
+	}
 
 	if (!cfg80211_reg_can_beacon(&rdev->wiphy, &ibss.chandef,
-				     NL80211_IFTYPE_ADHOC))
+				     NL80211_IFTYPE_ADHOC)) {
+		pr_err("join-ibss: adhoc cannot beacon.\n");
 		return -EINVAL;
+	}
 
 	switch (ibss.chandef.width) {
 	case NL80211_CHAN_WIDTH_5:
@@ -7315,6 +7346,8 @@ static int nl80211_join_ibss(struct sk_buff *skb, struct genl_info *info)
 		if (rdev->wiphy.features & NL80211_FEATURE_HT_IBSS)
 			break;
 	default:
+		pr_err("join-ibss:  Invalid chandef width: %d (features: 0x%x)\n",
+		       ibss.chandef.width, rdev->wiphy.features);
 		return -EINVAL;
 	}
 
@@ -7331,8 +7364,10 @@ static int nl80211_join_ibss(struct sk_buff *skb, struct genl_info *info)
 
 		err = ieee80211_get_ratemask(sband, rates, n_rates,
 					     &ibss.basic_rates);
-		if (err)
+		if (err) {
+			pr_err("join-ibss: get-ratemask failed.\n");
 			return err;
+		}
 	}
 
 	if (info->attrs[NL80211_ATTR_HT_CAPABILITY_MASK])
@@ -7341,8 +7376,10 @@ static int nl80211_join_ibss(struct sk_buff *skb, struct genl_info *info)
 		       sizeof(ibss.ht_capa_mask));
 
 	if (info->attrs[NL80211_ATTR_HT_CAPABILITY]) {
-		if (!info->attrs[NL80211_ATTR_HT_CAPABILITY_MASK])
+		if (!info->attrs[NL80211_ATTR_HT_CAPABILITY_MASK]) {
+			pr_err("join-ibss: no HT capability mask.\n");
 			return -EINVAL;
+		}
 		memcpy(&ibss.ht_capa,
 		       nla_data(info->attrs[NL80211_ATTR_HT_CAPABILITY]),
 		       sizeof(ibss.ht_capa));
@@ -7350,8 +7387,10 @@ static int nl80211_join_ibss(struct sk_buff *skb, struct genl_info *info)
 
 	if (info->attrs[NL80211_ATTR_MCAST_RATE] &&
 	    !nl80211_parse_mcast_rate(rdev, ibss.mcast_rate,
-			nla_get_u32(info->attrs[NL80211_ATTR_MCAST_RATE])))
+			nla_get_u32(info->attrs[NL80211_ATTR_MCAST_RATE]))) {
+		pr_err("join-ibss: failure to parse mcast rate.\n");
 		return -EINVAL;
+	}
 
 	if (ibss.privacy && info->attrs[NL80211_ATTR_KEYS]) {
 		bool no_ht = false;
@@ -7359,12 +7398,16 @@ static int nl80211_join_ibss(struct sk_buff *skb, struct genl_info *info)
 		connkeys = nl80211_parse_connkeys(rdev,
 					  info->attrs[NL80211_ATTR_KEYS],
 					  &no_ht);
-		if (IS_ERR(connkeys))
+		if (IS_ERR(connkeys)) {
+			pr_err("join-ibss:  connkeys is bad.\n");
 			return PTR_ERR(connkeys);
+		}
 
 		if ((ibss.chandef.width != NL80211_CHAN_WIDTH_20_NOHT) &&
 		    no_ht) {
 			kfree(connkeys);
+			pr_err("join-ibss: chandef does not match HT: %d no-ht: %d\n",
+			       ibss.chandef.width, (int)(no_ht));
 			return -EINVAL;
 		}
 	}
@@ -7376,8 +7419,10 @@ static int nl80211_join_ibss(struct sk_buff *skb, struct genl_info *info)
 		nla_get_flag(info->attrs[NL80211_ATTR_HANDLE_DFS]);
 
 	err = cfg80211_join_ibss(rdev, dev, &ibss, connkeys);
-	if (err)
+	if (err) {
+		pr_err("join-ibss: cfg-join-ibss failed.\n");
 		kzfree(connkeys);
+	}
 	return err;
 }
 
