@@ -17,6 +17,7 @@
 
 #include <linux/skbuff.h>
 #include <linux/ctype.h>
+#include <linux/module.h>
 
 #include "core.h"
 #include "htc.h"
@@ -26,6 +27,12 @@
 #include "mac.h"
 #include "testmode.h"
 #include "wmi-ops.h"
+
+static int modparam_override_eeprom_regdomain = -1;
+module_param_named(override_eeprom_regdomain,
+		   modparam_override_eeprom_regdomain, int, 0444);
+MODULE_PARM_DESC(override_eeprom_regdomain, "Override regdomain hardcoded in EEPROM with this value (DANGEROUS).");
+
 
 /* MAIN WMI cmd track */
 static struct wmi_cmd_map wmi_cmd_map = {
@@ -3152,6 +3159,21 @@ void ath10k_wmi_event_service_ready(struct ath10k *ar, struct sk_buff *skb)
 			 ar->fw_version_minor,
 			 ar->fw_version_release,
 			 ar->fw_version_build);
+	}
+
+	if ((modparam_override_eeprom_regdomain != -1) &&
+	    (modparam_override_eeprom_regdomain != ar->ath_common.regulatory.current_rd)) {
+		static int do_once = 1;
+		if (do_once) {
+			ath10k_err(ar, "DANGER! You're overriding EEPROM-defined regulatory domain,"
+				   "\nfrom: 0x%x to 0x%x\n",
+				   ar->ath_common.regulatory.current_rd, modparam_override_eeprom_regdomain);
+			ath10k_err(ar, "Your card was not certified to operate in the domain you chose.\n");
+			ath10k_err(ar, "This might result in a violation of your local regulatory rules.\n");
+			ath10k_err(ar, "Do not ever do this unless you really know what you are doing!\n");
+			do_once = 0;
+		}
+		ar->ath_common.regulatory.current_rd = modparam_override_eeprom_regdomain | COUNTRY_ERD_FLAG;
 	}
 
 	num_mem_reqs = __le32_to_cpu(arg.num_mem_reqs);
