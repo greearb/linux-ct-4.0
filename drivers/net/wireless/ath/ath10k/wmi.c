@@ -856,8 +856,37 @@ static struct wmi_cmd_map wmi_10_2_cmd_map = {
 	.pdev_get_temperature_cmdid = WMI_CMD_UNSUPPORTED,
 };
 
-void ath10k_wmi_put_wmi_channel(struct wmi_channel *ch,
-				const struct wmi_channel_arg *arg)
+static bool ath10k_ok_skip_ch_reservation(struct ath10k *ar, u32 vdev_id)
+{
+	struct ath10k_vif *arvif;
+	bool rv = false;
+
+	if (! test_bit(ATH10K_FW_FEATURE_WMI_10X_CT, ar->fw_features))
+		return rv;
+
+	list_for_each_entry(arvif, &ar->arvifs, list) {
+		if (!arvif->is_up)
+			continue;
+
+		if (arvif->vdev_id == vdev_id) {
+			if (arvif->vdev_type != WMI_VDEV_TYPE_STA)
+				return false;
+			continue;
+		}
+
+		/* If there is another station up, then assume
+		 * requested station must use same channel.
+		 */
+		if (arvif->vdev_type == WMI_VDEV_TYPE_STA)
+			rv = true;
+	}
+	return rv;
+}
+
+void ath10k_wmi_put_wmi_channel(struct ath10k *ar,
+				struct wmi_channel *ch,
+				const struct wmi_channel_arg *arg,
+				u32 vdev_id)
 {
 	u32 flags = 0;
 
@@ -875,6 +904,10 @@ void ath10k_wmi_put_wmi_channel(struct wmi_channel *ch,
 		flags |= WMI_CHAN_FLAG_HT40_PLUS;
 	if (arg->chan_radar)
 		flags |= WMI_CHAN_FLAG_DFS;
+
+	if (ath10k_ok_skip_ch_reservation(ar, vdev_id))
+		/* Disable having firmware request on-channel reservation */
+		flags |= WMI_CHAN_FLAG_NO_RESERVE_CH;
 
 	ch->mhz = __cpu_to_le32(arg->freq);
 	ch->band_center_freq1 = __cpu_to_le32(arg->band_center_freq1);
@@ -4409,7 +4442,7 @@ ath10k_wmi_op_gen_vdev_start(struct ath10k *ar,
 		memcpy(cmd->ssid.ssid, arg->ssid, arg->ssid_len);
 	}
 
-	ath10k_wmi_put_wmi_channel(&cmd->chan, &arg->channel);
+	ath10k_wmi_put_wmi_channel(ar, &cmd->chan, &arg->channel, arg->vdev_id);
 
 	ath10k_dbg(ar, ATH10K_DBG_WMI,
 		   "wmi vdev %s id 0x%x flags: 0x%0X, freq %d, mode %d, ch_flags: 0x%0X, max_power: %d\n",
@@ -4779,7 +4812,7 @@ ath10k_wmi_op_gen_scan_chan_list(struct ath10k *ar,
 		ch = &arg->channels[i];
 		ci = &cmd->chan_info[i];
 
-		ath10k_wmi_put_wmi_channel(ci, ch);
+		ath10k_wmi_put_wmi_channel(ar, ci, ch, -1);
 	}
 
 	return skb;
