@@ -1767,6 +1767,7 @@ static const char ath10k_gstrings_stats[][ETH_GSTRING_LEN] = {
 	"d_fw_crash_count",
 	"d_fw_warm_reset_count",
 	"d_fw_cold_reset_count",
+	"d_fw_powerup_failed", /* boolean */
 };
 
 #define ATH10K_SSTATS_LEN ARRAY_SIZE(ath10k_gstrings_stats)
@@ -1866,6 +1867,7 @@ void ath10k_debug_get_et_stats(struct ieee80211_hw *hw,
 	data[i++] = ar->stats.fw_crash_counter;
 	data[i++] = ar->stats.fw_warm_reset_counter;
 	data[i++] = ar->stats.fw_cold_reset_counter;
+	data[i++] = ar->fw_powerup_failed;
 
 	spin_unlock_bh(&ar->data_lock);
 

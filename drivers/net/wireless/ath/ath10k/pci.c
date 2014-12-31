@@ -2184,7 +2184,7 @@ static int ath10k_pci_hif_power_up(struct ath10k *ar)
 	ret = ath10k_pci_wake(ar);
 	if (ret) {
 		ath10k_err(ar, "failed to wake up target: %d\n", ret);
-		return ret;
+		goto err_ret;
 	}
 
 	/*
@@ -2227,6 +2227,7 @@ static int ath10k_pci_hif_power_up(struct ath10k *ar)
 		goto err_ce;
 	}
 
+	ar->fw_powerup_failed = false;
 	return 0;
 
 err_ce:
@@ -2234,6 +2235,14 @@ err_ce:
 
 err_sleep:
 	ath10k_pci_sleep(ar);
+
+err_ret:
+	/* If we have failed to power-up, it may take a reboot to
+	 * get the NIC back online.
+	 * Set flag accordinly so that user-space can know.
+	 */
+	ar->fw_powerup_failed = !!ret;
+
 	return ret;
 }
 
