@@ -221,6 +221,27 @@ struct ath10k_fw_stats_pdev {
 struct ath10k_fw_stats {
 	struct list_head pdevs;
 	struct list_head peers;
+
+	/* Register and related dump, CT firmware only. */
+	u32 mac_filter_addr_l32;
+	u32 mac_filter_addr_u16;
+	u32 dcu_slot_time;
+	u32 phy_bb_mode_select;
+	u32 pcu_bssid_l32;
+	u32 pcu_bssid_u16;
+	u32 pcu_bssid2_l32;
+	u32 pcu_bssid2_u16;
+	u32 pcu_sta_addr_l32;
+	u32 pcu_sta_addr_u16;
+	u32 mac_dma_cfg;
+	u32 mac_dma_txcfg;
+	u32 pcu_rxfilter;
+	u32 phy_bb_gen_controls;
+	u32 sw_powermode;
+	u16 sw_chainmask_tx;
+	u16 sw_chainmask_rx;
+	u32 sw_opmode;
+	u32 sw_rxfilter;
 };
 
 struct ath10k_dfs_stats {
