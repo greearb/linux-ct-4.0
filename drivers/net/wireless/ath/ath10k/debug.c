@@ -28,6 +28,8 @@
 /* ms */
 #define ATH10K_DEBUG_HTT_STATS_INTERVAL 1000
 
+#define ATH10K_DEBUG_NOP_INTERVAL 2000 /* ms */
+
 #define ATH10K_FW_CRASH_DUMP_VERSION 1
 
 /**
@@ -1548,6 +1550,27 @@ static void ath10k_debug_htt_stats_dwork(struct work_struct *work)
 	mutex_unlock(&ar->conf_mutex);
 }
 
+static void ath10k_debug_nop_dwork(struct work_struct *work)
+{
+	struct ath10k *ar = container_of(work, struct ath10k,
+					 debug.nop_dwork.work);
+
+	mutex_lock(&ar->conf_mutex);
+
+	if (ar->state == ATH10K_STATE_ON) {
+		int ret = ath10k_wmi_request_nop(ar);
+		if (ret) {
+			ath10k_warn(ar, "failed to send wmi nop: %d\n", ret);
+		}
+	}
+
+	/* Re-arm periodic work. */
+	queue_delayed_work(ar->workqueue, &ar->debug.nop_dwork,
+			   msecs_to_jiffies(ATH10K_DEBUG_NOP_INTERVAL));
+
+	mutex_unlock(&ar->conf_mutex);
+}
+
 static ssize_t ath10k_read_htt_stats_mask(struct file *file,
 					  char __user *user_buf,
 					  size_t count, loff_t *ppos)
@@ -2281,6 +2304,11 @@ int ath10k_debug_register(struct ath10k *ar)
 		return -ENOMEM;
 	}
 
+	INIT_DELAYED_WORK(&ar->debug.nop_dwork, ath10k_debug_nop_dwork);
+
+	queue_delayed_work(ar->workqueue, &ar->debug.nop_dwork,
+			   msecs_to_jiffies(ATH10K_DEBUG_NOP_INTERVAL));
+
 	INIT_DELAYED_WORK(&ar->debug.htt_stats_dwork,
 			  ath10k_debug_htt_stats_dwork);
 
@@ -2354,6 +2382,7 @@ int ath10k_debug_register(struct ath10k *ar)
 
 void ath10k_debug_unregister(struct ath10k *ar)
 {
+	cancel_delayed_work_sync(&ar->debug.nop_dwork);
 	cancel_delayed_work_sync(&ar->debug.htt_stats_dwork);
 }
 

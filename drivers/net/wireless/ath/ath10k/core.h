@@ -394,6 +394,7 @@ struct ath10k_debug {
 
 	unsigned long htt_stats_mask;
 	struct delayed_work htt_stats_dwork;
+	struct delayed_work nop_dwork;
 	struct ath10k_dfs_stats dfs_stats;
 	struct ath_dfs_pool_stats dfs_pool_stats;
 
@@ -403,6 +404,7 @@ struct ath10k_debug {
 	u32 pktlog_filter;
 	u32 reg_addr;
 	u32 nf_cal_period;
+	u32 nop_id;
 
 	u8 htt_max_amsdu;
 	u8 htt_max_ampdu;
