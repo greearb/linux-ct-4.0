@@ -137,9 +137,18 @@ int ath10k_htc_send(struct ath10k_htc *htc,
 			goto err_pull;
 		}
 		ep->tx_credits -= credits;
-		ath10k_dbg(ar, ATH10K_DBG_HTC,
-			   "htc ep %d consumed %d credits (total %d)\n",
-			   eid, credits, ep->tx_credits);
+		if (eid == ar->wmi.eid) {
+			struct wmi_cmd_hdr* hdr;
+			hdr = (struct wmi_cmd_hdr*)(skb->data + sizeof(struct ath10k_htc_hdr));
+			ath10k_dbg(ar, ATH10K_DBG_HTC,
+				   "htc ep %d consumed %d credits (total %d, wmi-cmd 0x%x)\n",
+				   eid, credits, ep->tx_credits, __le32_to_cpu(hdr->cmd_id));
+		}
+		else {
+			ath10k_dbg(ar, ATH10K_DBG_HTC,
+				   "htc ep %d consumed %d credits (total %d)\n",
+				   eid, credits, ep->tx_credits);
+		}
 		spin_unlock_bh(&htc->tx_lock);
 	}
 
