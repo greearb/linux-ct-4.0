@@ -319,6 +319,7 @@ int ath10k_ce_send_nolock(struct ath10k_ce_pipe *ce_state,
 		ath10k_ce_src_ring_write_index_set(ar, ctrl_addr, write_index);
 
 	src_ring->write_index = write_index;
+	ce_state->last_tx_transfer_id = transfer_id;
 exit:
 	return ret;
 }

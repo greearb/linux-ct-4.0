@@ -120,6 +120,13 @@ struct ath10k_ce_pipe {
 	unsigned int src_sz_max;
 	struct ath10k_ce_ring *src_ring;
 	struct ath10k_ce_ring *dest_ring;
+
+	/* Some fields used for debugging */
+	unsigned int last_rx_transfer_id;
+	unsigned int last_ce_send_done_transfer_id;
+	unsigned int last_tx_transfer_id;
+	unsigned int last_bmi_send_done_transfer_id;
+	unsigned int last_bmi_recv_transfer_id;
 };
 
 /* Copy Engine settable attributes */

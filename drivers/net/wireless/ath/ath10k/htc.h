@@ -316,6 +316,7 @@ struct ath10k_htc_ep {
 	int dl_is_polled; /* call HIF to fetch rx (not implemented) */
 
 	u8 seq_no; /* for debugging */
+	u16 next_transfer_id; /* for debugging */
 	int tx_credits;
 	int tx_credit_size;
 	int tx_credits_per_max_message;

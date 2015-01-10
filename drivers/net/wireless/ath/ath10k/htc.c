@@ -160,7 +160,7 @@ int ath10k_htc_send(struct ath10k_htc *htc,
 	if (ret)
 		goto err_credits;
 
-	sg_item.transfer_id = ep->eid;
+	sg_item.transfer_id = ep->next_transfer_id++;
 	sg_item.transfer_context = skb;
 	sg_item.vaddr = skb->data;
 	sg_item.paddr = skb_cb->paddr;
