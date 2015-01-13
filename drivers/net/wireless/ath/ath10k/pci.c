@@ -1260,6 +1260,18 @@ static void ath10k_pci_fw_crashed_dump(struct ath10k *ar)
 			   pci->ce_states[i].last_tx_transfer_id,
 			   pci->ce_states[i].last_bmi_send_done_transfer_id,
 			   pci->ce_states[i].last_bmi_recv_transfer_id);
+		if (pci->ce_states[i].src_ring) {
+			ath10k_err(ar, "  src-ring: write: %d  sw: %d hw: %d\n",
+				   pci->ce_states[i].src_ring->write_index,
+				   pci->ce_states[i].src_ring->sw_index,
+				   pci->ce_states[i].src_ring->hw_index);
+		}
+		if (pci->ce_states[i].dest_ring) {
+			ath10k_err(ar, "  dest-ring: write: %d  sw: %d hw: %d\n",
+				   pci->ce_states[i].dest_ring->write_index,
+				   pci->ce_states[i].dest_ring->sw_index,
+				   pci->ce_states[i].dest_ring->hw_index);
+		}
 	}
 	ath10k_err(ar, "last htt-tx-id: %d\n", ar->htt.htt_transfer_id);
 
