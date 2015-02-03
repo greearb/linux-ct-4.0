@@ -2323,8 +2323,9 @@ static void ath10k_tx_htt(struct ath10k *ar, struct sk_buff *skb)
 
 exit:
 	if (ret) {
-		ath10k_warn(ar, "failed to transmit packet, dropping: %d\n",
-			    ret);
+		if (net_ratelimit())
+			ath10k_warn(ar, "failed to transmit packet, dropping: %d\n",
+				    ret);
 		ieee80211_free_txskb(ar->hw, skb);
 	}
 }
