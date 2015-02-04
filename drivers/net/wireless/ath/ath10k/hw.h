@@ -426,6 +426,7 @@ struct ath10k_pktlog_hdr {
 #define PCIE_INTR_ENABLE_ADDRESS		0x0008
 #define PCIE_INTR_CAUSE_ADDRESS			0x000c
 #define PCIE_INTR_CLR_ADDRESS			0x0014
+#define SCRATCH_2_ADDRESS                       0x002c
 #define SCRATCH_3_ADDRESS			ar->regs->scratch_3_address
 #define CPU_INTR_ADDRESS			0x0010
 
@@ -433,6 +434,10 @@ struct ath10k_pktlog_hdr {
 #define FW_INDICATOR_ADDRESS	(SOC_CORE_BASE_ADDRESS + SCRATCH_3_ADDRESS)
 #define FW_IND_EVENT_PENDING			1
 #define FW_IND_INITIALIZED			2
+
+/* CT firmware only */
+#define FW_IND_SCRATCH2_WR      (1<<14) /* scratch2 has data written to it */
+#define FW_IND_SCRATCH2_RD      (1<<15) /* scratch2 has been read (by host) */
 
 /* HOST_REG interrupt from firmware */
 #define PCIE_INTR_FIRMWARE_MASK			0x00000400
