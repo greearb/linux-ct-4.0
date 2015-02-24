@@ -1696,7 +1696,7 @@ static int mac80211_hwsim_get_survey(
 {
 	struct ieee80211_conf *conf = &hw->conf;
 
-	wiphy_debug(hw->wiphy, "%s (idx=%d)\n", __func__, idx);
+	/* wiphy_debug(hw->wiphy, "%s (idx=%d)\n", __func__, idx); */
 
 	if (idx != 0)
 		return -ENOENT;
