@@ -4880,6 +4880,10 @@ static int ath10k_set_fixed_rate_param(struct ath10k_vif *arvif,
 
 	mutex_lock(&ar->conf_mutex);
 
+	ath10k_dbg(ar, ATH10K_DBG_MAC, "mac set fixed rate, current: rt: %i  nss: %i  sgi: %i  new:  rt: %i  nss: %i  sgi: %i\n",
+		   (int)(arvif->fixed_rate), (int)(arvif->fixed_nss), (int)(arvif->force_sgi),
+		   (int)(fixed_rate), (int)(fixed_nss), (int)(force_sgi));
+
 	if (arvif->fixed_rate == fixed_rate &&
 	    arvif->fixed_nss == fixed_nss &&
 	    arvif->force_sgi == force_sgi)
@@ -4934,6 +4938,27 @@ exit:
 	return ret;
 }
 
+static void ath10k_dbg_print_bitrate_mask(struct ath10k *ar,
+					  const struct cfg80211_bitrate_mask *mask,
+					  enum ieee80211_band band) {
+	ath10k_dbg(ar, ATH10K_DBG_MAC, "mask:  legacy: 0x%x  gi: %d\n",
+		   mask->control[band].legacy,
+		   mask->control[band].gi);
+	BUILD_BUG_ON(IEEE80211_HT_MCS_MASK_LEN != 10);
+	ath10k_dbg(ar, ATH10K_DBG_MAC, "ht_mcs: %02hx %02hx %02hx %02hx %02hx %02hx %02hx %02hx %02hx %02hx\n",
+		   mask->control[band].ht_mcs[0], mask->control[band].ht_mcs[1],
+		   mask->control[band].ht_mcs[2], mask->control[band].ht_mcs[3],
+		   mask->control[band].ht_mcs[4], mask->control[band].ht_mcs[5],
+		   mask->control[band].ht_mcs[6], mask->control[band].ht_mcs[7],
+		   mask->control[band].ht_mcs[8], mask->control[band].ht_mcs[9]);
+	BUILD_BUG_ON(NL80211_VHT_NSS_MAX != 8);
+	ath10k_dbg(ar, ATH10K_DBG_MAC, "vht_mcs: %04hx %04hx %04hx %04hx %04hx %04hx %04hx %04hx\n",
+		   mask->control[band].vht_mcs[0], mask->control[band].vht_mcs[1],
+		   mask->control[band].vht_mcs[2], mask->control[band].vht_mcs[3],
+		   mask->control[band].vht_mcs[4], mask->control[band].vht_mcs[5],
+		   mask->control[band].vht_mcs[6], mask->control[band].vht_mcs[7]);
+}
+
 static int ath10k_set_bitrate_mask(struct ieee80211_hw *hw,
 				   struct ieee80211_vif *vif,
 				   const struct cfg80211_bitrate_mask *mask)
@@ -4944,6 +4969,9 @@ static int ath10k_set_bitrate_mask(struct ieee80211_hw *hw,
 	u8 fixed_rate = WMI_FIXED_RATE_NONE;
 	u8 fixed_nss = ar->num_rf_chains;
 	u8 force_sgi;
+
+	ath10k_dbg(ar, ATH10K_DBG_MAC, "set bitrate mask, vid: %d  band: %d\n", arvif->vdev_id, band);
+	ath10k_dbg_print_bitrate_mask(ar, mask, band);
 
 	if (ar->cfg_tx_chainmask)
 		fixed_nss = get_nss_from_chainmask(ar->cfg_tx_chainmask);
