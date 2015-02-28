@@ -83,7 +83,7 @@ static void ath10k_set_tx_rate_status(struct ieee80211_tx_rate *rate,
 
 
 void ath10k_txrx_tx_unref(struct ath10k_htt *htt,
-			  const struct htt_tx_done *tx_done)
+			  struct htt_tx_done *tx_done)
 {
 	struct ath10k *ar = htt->ar;
 	struct device *dev = ar->dev;
@@ -132,14 +132,21 @@ void ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 	if (!(info->flags & IEEE80211_TX_CTL_NO_ACK))
 		info->flags |= IEEE80211_TX_STAT_ACK;
 
-	if (tx_done->no_ack)
-		info->flags &= ~IEEE80211_TX_STAT_ACK;
-
 	if (tx_done->tx_rate_code || tx_done->tx_rate_flags) {
 		ath10k_set_tx_rate_status(&info->status.rates[0], tx_done);
+
+		/* Deal with tx-completion status */
+		if ((tx_done->tx_rate_flags & 0x3) == ATH10K_RC_FLAG_XRETRY)
+			tx_done->no_ack = true;
+		/* TODO:  Report drops differently. */
+		if ((tx_done->tx_rate_flags & 0x3) == ATH10K_RC_FLAG_DROP)
+			tx_done->no_ack = true;
 	} else {
 		info->status.rates[0].idx = -1;
 	}
+
+	if (tx_done->no_ack)
+		info->flags &= ~IEEE80211_TX_STAT_ACK;
 
 	ieee80211_tx_status(htt->ar->hw, msdu);
 	/* we do not own the msdu anymore */
