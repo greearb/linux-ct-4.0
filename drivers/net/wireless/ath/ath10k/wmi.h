@@ -5014,9 +5014,12 @@ void ath10k_wmi_event_vdev_resume_req(struct ath10k *ar, struct sk_buff *skb);
 void ath10k_wmi_event_service_ready(struct ath10k *ar, struct sk_buff *skb);
 int ath10k_wmi_event_ready(struct ath10k *ar, struct sk_buff *skb);
 
-#ifdef CONFIG_ATH10K_DEBUG
+#ifdef CONFIG_ATH10K_DEBUGFS
+/* TODO:  Should really enable this all the time, not just when DEBUGFS is enabled. --Ben */
 /* CT Firmware only */
 int ath10k_wmi_request_nop(struct ath10k *ar);
+#else
+#warning Please enable ATH10K-DEBUGFS kernel option for optimal support for CT firmware.
 #endif
 
 #endif /* _WMI_H_ */
