@@ -135,12 +135,15 @@ void ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 	if (tx_done->tx_rate_code || tx_done->tx_rate_flags) {
 		ath10k_set_tx_rate_status(&info->status.rates[0], tx_done);
 
-		/* Deal with tx-completion status */
-		if ((tx_done->tx_rate_flags & 0x3) == ATH10K_RC_FLAG_XRETRY)
-			tx_done->no_ack = true;
-		/* TODO:  Report drops differently. */
-		if ((tx_done->tx_rate_flags & 0x3) == ATH10K_RC_FLAG_DROP)
-			tx_done->no_ack = true;
+		/* Only in version 14 and higher of CT firmware */
+		if (test_bit(ATH10K_FW_FEATURE_HAS_TXSTATUS_NOACK, ar->fw_features)) {
+			/* Deal with tx-completion status */
+			if ((tx_done->tx_rate_flags & 0x3) == ATH10K_RC_FLAG_XRETRY)
+				tx_done->no_ack = true;
+			/* TODO:  Report drops differently. */
+			if ((tx_done->tx_rate_flags & 0x3) == ATH10K_RC_FLAG_DROP)
+				tx_done->no_ack = true;
+		}
 	} else {
 		info->status.rates[0].idx = -1;
 	}
