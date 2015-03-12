@@ -4882,11 +4882,12 @@ static int ath10k_set_fixed_rate_param(struct ath10k_vif *arvif,
 
 	mutex_lock(&ar->conf_mutex);
 
-	ath10k_dbg(ar, ATH10K_DBG_MAC, "mac set fixed rate, current: rt: %i  nss: %i  sgi: %i  new:  rt: %i  nss: %i  sgi: %i\n",
+	ath10k_dbg(ar, ATH10K_DBG_MAC, "mac set fixed rate, current: rt: %i  nss: %i  sgi: %i  new:  rt: %i  nss: %i  sgi: %i set-rate-type: %d\n",
 		   (int)(arvif->fixed_rate), (int)(arvif->fixed_nss), (int)(arvif->force_sgi),
-		   (int)(fixed_rate), (int)(fixed_nss), (int)(force_sgi));
+		   (int)(fixed_rate), (int)(fixed_nss), (int)(force_sgi), ar->set_rate_type);
 
-	if (arvif->fixed_rate == fixed_rate &&
+	if (ar->set_rate_type == 0 &&
+	    arvif->fixed_rate == fixed_rate &&
 	    arvif->fixed_nss == fixed_nss &&
 	    arvif->force_sgi == force_sgi)
 		goto exit;
@@ -4897,15 +4898,24 @@ static int ath10k_set_fixed_rate_param(struct ath10k_vif *arvif,
 	if (force_sgi)
 		ath10k_dbg(ar, ATH10K_DBG_MAC, "mac force sgi\n");
 
-	vdev_param = ar->wmi.vdev_param->fixed_rate;
+	if (ar->set_rate_type)
+		vdev_param = ar->set_rate_type;
+	else
+		vdev_param = ar->wmi.vdev_param->fixed_rate;
 	ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
 					vdev_param, fixed_rate);
 	if (ret) {
-		ath10k_warn(ar, "failed to set fixed rate param 0x%02x: %d\n",
-			    fixed_rate, ret);
+		ath10k_warn(ar, "failed to set fixed rate (0x%x) param 0x%02x: %d\n",
+			    vdev_param, fixed_rate, ret);
 		ret = -EINVAL;
 		goto exit;
 	}
+
+	/* If we are setting one of the specialized rates (mgmt, ucast, bcast)
+	 * then we do not need to set the other values, so skip to exit.
+	 */
+	if (ar->set_rate_type != 0)
+		goto exit;
 
 	arvif->fixed_rate = fixed_rate;
 
