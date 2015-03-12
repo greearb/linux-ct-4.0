@@ -129,6 +129,7 @@ enum {
  * @HWSIM_ATTR_RADIO_NAME: Name of radio, e.g. phy666
  * @HWSIM_ATTR_NO_VIF:  Do not create vif (wlanX) when creating radio.
  * @HWSIM_ATTR_FREQ: Frequency at which packet is transmitted or received.
+ * @HWSIM_ATTR_TX_INFO2: hwsim_tx_rate2 array
  * @__HWSIM_ATTR_MAX: enum limit
  */
 
@@ -154,6 +155,7 @@ enum {
 	HWSIM_ATTR_RADIO_NAME,
 	HWSIM_ATTR_NO_VIF,
 	HWSIM_ATTR_FREQ,
+	HWSIM_ATTR_TX_INFO2,
 	__HWSIM_ATTR_MAX,
 };
 #define HWSIM_ATTR_MAX (__HWSIM_ATTR_MAX - 1)
@@ -174,6 +176,12 @@ enum {
 struct hwsim_tx_rate {
 	s8 idx;
 	u8 count;
+} __packed;
+
+/* Auxilary info to allow user-space to better understand the rate */
+struct hwsim_tx_rate2 {
+	u16 rc_flags; /* rate-ctrl flags (see mac80211_rate_control_flags) */
+	s16 power_level;
 } __packed;
 
 #endif /* __MAC80211_HWSIM_H */
