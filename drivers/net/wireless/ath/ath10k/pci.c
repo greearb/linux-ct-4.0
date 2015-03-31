@@ -1100,6 +1100,8 @@ static int ath10k_ct_fw_crash_regs_harder(struct ath10k *ar,
 	int q;
 #define MAX_SPIN_TRIES 1000000
 
+	ath10k_warn(ar, "in crash-regs-harder\n");
+
 	if (!test_bit(ATH10K_FW_FEATURE_WMI_10X_CT, ar->fw_features)) {
 		return -EINVAL;
 	}
@@ -1109,6 +1111,8 @@ static int ath10k_ct_fw_crash_regs_harder(struct ath10k *ar,
 		if (val & FW_IND_SCRATCH2_WR)
 			goto pingpong;
 	}
+
+	ath10k_warn(ar, "in crash-regs-harder, firmware did not provide indicator: 0x%x\n", val);
 	return -EBUSY;
 
 pingpong:
