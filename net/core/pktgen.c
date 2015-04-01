@@ -96,7 +96,7 @@
  * New xmit() return, do_div and misc clean up by Stephen Hemminger
  * <shemminger@osdl.org> 040923
  *
- * Randy Dunlap fixed u64 printk compiler waring
+ * Randy Dunlap fixed u64 printk compiler warning
  *
  * Remove FCS from BW calculation.  Lennert Buytenhek <buytenh@wantstofly.org>
  * New time handling. Lennert Buytenhek <buytenh@wantstofly.org> 041213
@@ -344,6 +344,12 @@ static __u64 getRelativeCurNs(void) {
 
 
 static void timestamp_skb(struct pktgen_dev* pkt_dev, struct pktgen_hdr* pgh) {
+	if (pkt_dev->flags & F_NO_TIMESTAMP) {
+		pgh->tv_hi = 0;
+		pgh->tv_lo = 0;
+		return;
+	}
+
 	if (pkt_dev->flags & F_USE_REL_TS) {
 		__u64 now = getRelativeCurNs();
 		__u32 hi = (now >> 32);
@@ -661,6 +667,9 @@ static int pktgen_if_show(struct seq_file *seq, void *v)
 		seq_printf(seq, "     traffic_class: 0x%02x\n", pkt_dev->traffic_class);
 	}
 
+	if (pkt_dev->burst > 1)
+		seq_printf(seq, "     burst: %d\n", pkt_dev->burst);
+
 	if (pkt_dev->node >= 0)
 		seq_printf(seq, "     node: %d\n", pkt_dev->node);
 
@@ -686,6 +695,9 @@ static int pktgen_if_show(struct seq_file *seq, void *v)
 
 	if (pkt_dev->flags & F_UDPCSUM)
 		seq_puts(seq, "UDPCSUM  ");
+
+	if (pkt_dev->flags & F_NO_TIMESTAMP)
+		seq_puts(seq, "NO_TIMESTAMP  ");
 
 	if (pkt_dev->flags & F_MPLS_RND)
 		seq_puts(seq,  "MPLS_RND  ");
@@ -1262,6 +1274,19 @@ static ssize_t pktgen_if_write(struct file *file,
 			pkt_dev->dst_mac_count);
 		return count;
 	}
+	if (!strcmp(name, "burst")) {
+		len = num_arg(&user_buffer[i], 10, &value);
+		if (len < 0)
+			return len;
+
+		i += len;
+		if ((value > 1) &&
+		    (!(pkt_dev->odev->priv_flags & IFF_TX_SKB_SHARING)))
+			return -ENOTSUPP;
+		pkt_dev->burst = value < 1 ? 1 : value;
+		sprintf(pg_result, "OK: burst=%d", pkt_dev->burst);
+		return count;
+	}
 	if (!strcmp(name, "node")) {
 		len = num_arg(&user_buffer[i], 10, &value);
 		if (len < 0)
@@ -1323,6 +1348,12 @@ static ssize_t pktgen_if_write(struct file *file,
 
 		else if (strcmp(f, "!UDPCSUM") == 0)
 			pkt_dev->flags &= ~F_UDPCSUM;
+
+		else if (strcmp(f, "NO_TIMESTAMP") == 0)
+			pkt_dev->flags |= F_NO_TIMESTAMP;
+
+		else if (strcmp(f, "!NO_TIMESTAMP") == 0)
+			pkt_dev->flags &= ~F_NO_TIMESTAMP;
 
 		else if (strcmp(f, "!UDPDST_RND") == 0)
 			pkt_dev->flags &= ~F_UDPDST_RND;
@@ -1420,6 +1451,7 @@ static ssize_t pktgen_if_write(struct file *file,
 				"MACSRC_RND, MACDST_RND, TXSIZE_RND, IPV6, "
 				"MPLS_RND, VID_RND, SVID_RND, FLOW_SEQ, "
 				"QUEUE_MAP_RND, QUEUE_MAP_CPU, UDPCSUM, "
+				"NO_TIMESTAMP, "
 #ifdef CONFIG_XFRM
 				"IPSEC, "
 #endif
@@ -1613,7 +1645,7 @@ static ssize_t pktgen_if_write(struct file *file,
 		if (!mac_pton(valstr, pkt_dev->dst_mac))
 			return -EINVAL;
 		/* Set up Dest MAC */
-		memcpy(&pkt_dev->hh[0], pkt_dev->dst_mac, ETH_ALEN);
+		ether_addr_copy(&pkt_dev->hh[0], pkt_dev->dst_mac);
 		sprintf(pg_result, "OK: dstmac %pM", pkt_dev->dst_mac);
 		return count;
 	}
@@ -3276,25 +3308,24 @@ static struct sk_buff *fill_packet_ipv4(struct net_device *odev,
 	skb->dev = odev;
 	skb->pkt_type = PACKET_HOST;
 
+	pktgen_finalize_skb(pkt_dev, skb, datalen);
 
 	if (!(pkt_dev->flags & F_UDPCSUM)) {
 		skb->ip_summed = CHECKSUM_NONE;
 	} else if (odev->features & NETIF_F_V4_CSUM) {
 		skb->ip_summed = CHECKSUM_PARTIAL;
 		skb->csum = 0;
-		udp4_hwcsum(skb, udph->source, udph->dest);
+		udp4_hwcsum(skb, iph->saddr, iph->daddr);
 	} else {
-		__wsum csum = udp_csum(skb);
+		__wsum csum = skb_checksum(skb, skb_transport_offset(skb), datalen + 8, 0);
 
 		/* add protocol-dependent pseudo-header */
-		udph->check = csum_tcpudp_magic(udph->source, udph->dest,
+		udph->check = csum_tcpudp_magic(iph->saddr, iph->daddr,
 						datalen + 8, IPPROTO_UDP, csum);
 
 		if (udph->check == 0)
 			udph->check = CSUM_MANGLED_0;
 	}
-
-	pktgen_finalize_skb(pkt_dev, skb, datalen);
 
 #ifdef CONFIG_XFRM
 	if (!process_ipsec(pkt_dev, skb, protocol))
@@ -3413,6 +3444,8 @@ static struct sk_buff *fill_packet_ipv6(struct net_device *odev,
 	skb->dev = odev;
 	skb->pkt_type = PACKET_HOST;
 
+	pktgen_finalize_skb(pkt_dev, skb, datalen);
+
 	if (!(pkt_dev->flags & F_UDPCSUM)) {
 		skb->ip_summed = CHECKSUM_NONE;
 	} else if (odev->features & NETIF_F_V6_CSUM) {
@@ -3421,7 +3454,7 @@ static struct sk_buff *fill_packet_ipv6(struct net_device *odev,
 		skb->csum_offset = offsetof(struct udphdr, check);
 		udph->check = ~csum_ipv6_magic(&iph->saddr, &iph->daddr, udplen, IPPROTO_UDP, 0);
 	} else {
-		__wsum csum = udp_csum(skb);
+		__wsum csum = skb_checksum(skb, skb_transport_offset(skb), udplen, 0);
 
 		/* add protocol-dependent pseudo-header */
 		udph->check = csum_ipv6_magic(&iph->saddr, &iph->daddr, udplen, IPPROTO_UDP, csum);
@@ -3429,8 +3462,6 @@ static struct sk_buff *fill_packet_ipv6(struct net_device *odev,
 		if (udph->check == 0)
 			udph->check = CSUM_MANGLED_0;
 	}
-
-	pktgen_finalize_skb(pkt_dev, skb, datalen);
 
 	return skb;
 }
@@ -3618,30 +3649,32 @@ int pktgen_receive(struct sk_buff* skb) {
 				skip_seq_update = true;
                         }
                         else {
-				if (pkt_dev->flags & F_USE_REL_TS) {
-					__u64 now = getRelativeCurNs();
-					__u64 txat = ntohl(pgh->tv_hi);
-					__u64 d;
-					txat = txat << 32;
-					txat |= ntohl(pgh->tv_lo);
-					d = pg_div(now - txat, 1000);
-					record_latency(pkt_dev, d);
-				}
-				else {
-					s64 tx;
-					s64 rx;
-					struct timespec rxts;
-					s64 d;
-					if (! skb->tstamp.tv64)
-						__net_timestamp(skb);
-					skb_get_timestampns(skb, &rxts);
-					rx = timespec_to_ns(&rxts);
+				if (!(pkt_dev->flags & F_NO_TIMESTAMP)) {
+					if (pkt_dev->flags & F_USE_REL_TS) {
+						__u64 now = getRelativeCurNs();
+						__u64 txat = ntohl(pgh->tv_hi);
+						__u64 d;
+						txat = txat << 32;
+						txat |= ntohl(pgh->tv_lo);
+						d = pg_div(now - txat, 1000);
+						record_latency(pkt_dev, d);
+					}
+					else {
+						s64 tx;
+						s64 rx;
+						struct timespec rxts;
+						s64 d;
+						if (! skb->tstamp.tv64)
+							__net_timestamp(skb);
+						skb_get_timestampns(skb, &rxts);
+						rx = timespec_to_ns(&rxts);
 
-					tx = ntohl(pgh->tv_hi);
-					tx = tx << 32;
-					tx |= ntohl(pgh->tv_lo);
-					d = pg_div(rx - tx, 1000);
-					record_latency(pkt_dev, d);
+						tx = ntohl(pgh->tv_hi);
+						tx = tx << 32;
+						tx |= ntohl(pgh->tv_lo);
+						d = pg_div(rx - tx, 1000);
+						record_latency(pkt_dev, d);
+					}
 				}
 
                                 if ((pkt_dev->last_seq_rcvd + 1) == seq) {
@@ -4056,9 +4089,8 @@ static void pktgen_rem_thread(struct pktgen_thread *t)
 static void pktgen_xmit(struct pktgen_dev *pkt_dev, u64 now)
 {
 	static int do_once_hsx_wrn = 1;
+	unsigned int burst = ACCESS_ONCE(pkt_dev->burst);
 	struct net_device *odev = pkt_dev->odev;
-	netdev_tx_t (*xmit)(struct sk_buff *, struct net_device *)
-		= odev->netdev_ops->ndo_start_xmit;
 	struct netdev_queue *txq;
 	u16 queue_map;
 	int ret;
@@ -4160,7 +4192,7 @@ static void pktgen_xmit(struct pktgen_dev *pkt_dev, u64 now)
 
 	if (!(netif_xmit_frozen_or_stopped(txq))) {
 
-		atomic_inc(&(pkt_dev->skb->users));
+		atomic_add(burst, &pkt_dev->skb->users);
 		/* If we were blocked or had errors last time, then our skb most likely needs
 		   a timer update. */
 		if (pkt_dev->pgh && (pkt_dev->tx_blocked || !pkt_dev->last_ok)) {
@@ -4170,19 +4202,20 @@ static void pktgen_xmit(struct pktgen_dev *pkt_dev, u64 now)
 				pg_do_csum(pkt_dev->skb);
 		}
 	retry_now:
-		ret = (*xmit)(pkt_dev->skb, odev);
+		ret = netdev_start_xmit(pkt_dev->skb, odev, txq, --burst > 0);
 		/* printk("%s tx skb, rv: %i  s: %llu  c: %llu\n",
 		 *      pkt_dev->ifname, ret, pkt_dev->sofar, pkt_dev->count);
 		 */
 		switch (ret) {
 		case NETDEV_TX_OK:
-			txq_trans_update(txq);
 			pkt_dev->last_ok = 1;
 			pkt_dev->sofar++;
 			pkt_dev->tx_bytes += pkt_dev->last_pkt_size;
 			pkt_dev->tx_bytes_ll += pkt_dev->last_pkt_size + 24; /* pre-amble, frame gap, crc */
-			pkt_dev->next_tx_ns = getRelativeCurNs() + pkt_dev->delay_ns;
 			pkt_dev->tx_blocked = 0;
+			if (burst > 0 && !netif_xmit_frozen_or_drv_stopped(txq))
+				goto retry_now;
+			pkt_dev->next_tx_ns = getRelativeCurNs() + pkt_dev->delay_ns;
 			break;
 		case NETDEV_TX_LOCKED:
 			cpu_relax();
@@ -4225,6 +4258,8 @@ static void pktgen_xmit(struct pktgen_dev *pkt_dev, u64 now)
 			/* change tx time to now to show work was at least attempted. */
 			pkt_dev->next_tx_ns = now;
 		}
+		if (unlikely(burst))
+			atomic_sub(burst, &pkt_dev->skb->users);
 	}
 	else {			/* Retry it next time */
 		/* printk("pktgen: xmit_frozen_or_stopped: %i iface: %s  queue_map: %i.\n",
@@ -4499,6 +4534,7 @@ static int pktgen_add_device(struct pktgen_thread *t, const char *ifname)
 	pkt_dev->svlan_p = 0;
 	pkt_dev->svlan_cfi = 0;
 	pkt_dev->svlan_id = 0xffff;
+	pkt_dev->burst = 1;
 	pkt_dev->node = -1;
 	strncpy(pkt_dev->ifname, ifname, sizeof(pkt_dev->ifname));
 
@@ -4644,8 +4680,7 @@ static int pktgen_remove_device(struct pktgen_thread *t,
 
 	_rem_dev_from_if_list(t, pkt_dev);
 
-	if (pkt_dev->entry)
-		proc_remove(pkt_dev->entry);
+	proc_remove(pkt_dev->entry);
 
 #ifdef CONFIG_XFRM
 	free_SAs(pkt_dev);

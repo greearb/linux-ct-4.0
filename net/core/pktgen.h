@@ -39,6 +39,7 @@
 #define F_QUEUE_MAP_CPU (1<<14)	/* queue map mirrors smp_processor_id() */
 #define F_NODE          (1<<15)	/* Node memory alloc*/
 #define F_UDPCSUM       (1<<16)	/* Include UDP checksum */
+#define F_NO_TIMESTAMP  (1<<17)	/* Don't timestamp packets (default TS) */
 
 #define F_PG_STOPPED  (1<<28)   /* Endpoint is stopped, report only */
 #define F_CSUM        (1<<29)   /* Use UDP checksums */
@@ -244,6 +245,7 @@ struct pktgen_dev {
 	__u16 queue_map_min;
 	__u16 queue_map_max;
 	__u32 skb_priority;	/* skb priority field */
+	unsigned int burst;	/* number of duplicated packets to burst */
 	int node;		/* Memory node */
 
 #ifdef CONFIG_XFRM
