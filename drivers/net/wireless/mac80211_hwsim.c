@@ -2824,6 +2824,16 @@ static int hwsim_cloned_frame_received_nl(struct sk_buff *skb_2,
 	rx_status.rate_idx = nla_get_u32(info->attrs[HWSIM_ATTR_RX_RATE]);
 	rx_status.signal = nla_get_u32(info->attrs[HWSIM_ATTR_SIGNAL]);
 
+	if (info->attrs[HWSIM_ATTR_RX_INFO]) {
+		struct hwsim_rx_info *r;
+		r = (struct hwsim_rx_info *)nla_data(
+			info->attrs[HWSIM_ATTR_RX_INFO]);
+		rx_status.flag = r->rx_flags;
+		rx_status.vht_flag = r->vht_flags;
+		rx_status.vht_nss = r->vht_nss;
+		rx_status.ampdu_reference = r->ampdu_reference;
+	}
+
 	memcpy(IEEE80211_SKB_RXCB(skb), &rx_status, sizeof(rx_status));
 	data2->rx_pkts++;
 	data2->rx_bytes += skb->len;
