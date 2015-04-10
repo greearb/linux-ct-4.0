@@ -3195,23 +3195,33 @@ int ieee80211_check_combinations(struct ieee80211_sub_if_data *sdata,
 
 	lockdep_assert_held(&local->chanctx_mtx);
 
-	if (WARN_ON(hweight32(radar_detect) > 1))
+	if (WARN_ON(hweight32(radar_detect) > 1)) {
+		sdata_info(sdata, "comb-check: failed radar-detect: %d\n",
+			   (int)(radar_detect));
 		return -EINVAL;
+	}
 
 	if (WARN_ON(chandef && chanmode == IEEE80211_CHANCTX_SHARED &&
-		    !chandef->chan))
+		    !chandef->chan)) {
+		sdata_info(sdata, "comb-check: failed chantx-shared check\n");
 		return -EINVAL;
+	}
 
 	if (chandef)
 		num_different_channels = 1;
 
-	if (WARN_ON(iftype >= NUM_NL80211_IFTYPES))
+	if (WARN_ON(iftype >= NUM_NL80211_IFTYPES)) {
+		sdata_info(sdata, "comb-check: failed iftype check: %d\n",
+			   (int)(iftype));
 		return -EINVAL;
+	}
 
 	/* Always allow software iftypes */
 	if (local->hw.wiphy->software_iftypes & BIT(iftype)) {
-		if (radar_detect)
+		if (radar_detect) {
+			sdata_info(sdata, "comb-check: failed software-type + radar-detect\n");
 			return -EINVAL;
+		}
 		return 0;
 	}
 
@@ -3245,6 +3255,8 @@ int ieee80211_check_combinations(struct ieee80211_sub_if_data *sdata,
 		    local->hw.wiphy->software_iftypes & BIT(wdev_iter->iftype))
 			continue;
 
+		/*sdata_info(sdata, "sdata_iter: %s  type: %d  is active\n",
+		  sdata_iter->name, wdev_iter->iftype);*/
 		num[wdev_iter->iftype]++;
 		total++;
 	}
