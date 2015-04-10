@@ -1926,6 +1926,10 @@ static int ath10k_station_assoc(struct ath10k *ar,
 
 	lockdep_assert_held(&ar->conf_mutex);
 
+	ath10k_dbg(ar, ATH10K_DBG_MAC,
+		   "station_assoc, vdev %i reassoc %d  sta %pM def_wep_key_idx %d\n",
+		   arvif->vdev_id, reassoc, sta->addr, arvif->def_wep_key_idx);
+
 	ret = ath10k_peer_assoc_prepare(ar, vif, sta, &peer_arg);
 	if (ret) {
 		ath10k_warn(ar, "failed to prepare WMI peer assoc for %pM vdev %i: %i\n",
@@ -3823,6 +3827,9 @@ static int ath10k_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 	bool def_idx = false;
 	int ret = 0;
 
+	ath10k_dbg(ar, ATH10K_DBG_MAC, "mac set-key, idx: %d vdev: %d sta: %p\n",
+		   key->keyidx, arvif->vdev_id, sta);
+
 	if (key->keyidx > WMI_MAX_KEY_INDEX) {
 		if (cmd != DISABLE_KEY)
 			ath10k_warn(ar, "failed to install key, idx out of range: %d > %d, vdev: %d\n",
@@ -4050,6 +4057,10 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 	struct ath10k_vif *arvif = ath10k_vif_to_arvif(vif);
 	struct ath10k_sta *arsta = (struct ath10k_sta *)sta->drv_priv;
 	int ret = 0;
+
+	ath10k_dbg(ar, ATH10K_DBG_MAC,
+		   "mac sta-state change, vdev %d  vif: %pM old: %d  new: %d\n",
+		   arvif->vdev_id, sta->addr, old_state, new_state);
 
 	if (old_state == IEEE80211_STA_NOTEXIST &&
 	    new_state == IEEE80211_STA_NONE) {
@@ -5493,9 +5504,11 @@ int ath10k_mac_register(struct ath10k *ar)
 			IEEE80211_HW_HAS_RATE_CONTROL |
 			IEEE80211_HW_AP_LINK_PS |
 			IEEE80211_HW_SPECTRUM_MGMT |
+			IEEE80211_HW_SUPPORTS_PER_STA_GTK |
 			IEEE80211_HW_SW_CRYPTO_CONTROL;
 
 	ar->hw->wiphy->features |= NL80211_FEATURE_STATIC_SMPS;
+	ar->hw->wiphy->flags |= WIPHY_FLAG_IBSS_RSN;
 
 	if (ar->ht_cap_info & WMI_HT_CAP_DYNAMIC_SMPS)
 		ar->hw->wiphy->features |= NL80211_FEATURE_DYNAMIC_SMPS;
