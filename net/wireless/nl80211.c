@@ -2935,15 +2935,21 @@ static int nl80211_set_key(struct sk_buff *skb, struct genl_info *info)
 	struct net_device *dev = info->user_ptr[1];
 
 	err = nl80211_parse_key(info, &key);
-	if (err)
+	if (err) {
+		pr_info("set-key:  Failed to parse: %d\n", err);
 		return err;
+	}
 
-	if (key.idx < 0)
+	if (key.idx < 0) {
+		pr_info("set-key, idx is negative: %d\n", key.idx);
 		return -EINVAL;
+	}
 
 	/* only support setting default key */
-	if (!key.def && !key.defmgmt)
+	if (!key.def && !key.defmgmt) {
+		pr_info("set-key: tried to set non-default key.\n");
 		return -EINVAL;
+	}
 
 	wdev_lock(dev->ieee80211_ptr);
 
@@ -2954,20 +2960,26 @@ static int nl80211_set_key(struct sk_buff *skb, struct genl_info *info)
 		}
 
 		err = nl80211_key_allowed(dev->ieee80211_ptr);
-		if (err)
+		if (err) {
+			pr_info("set-key:  key is not allowed: %d\n", err);
 			goto out;
+		}
 
 		err = rdev_set_default_key(rdev, dev, key.idx,
 						 key.def_uni, key.def_multi);
 
-		if (err)
+		if (err) {
+			pr_info("set-default-key had error: %d\n", err);
 			goto out;
+		}
 
 #ifdef CONFIG_CFG80211_WEXT
 		dev->ieee80211_ptr->wext.default_key = key.idx;
 #endif
 	} else {
 		if (key.def_uni || !key.def_multi) {
+			pr_info("set-key, uni: %d or not multi: %d\n",
+				key.def_uni, key.def_multi);
 			err = -EINVAL;
 			goto out;
 		}
@@ -2978,12 +2990,16 @@ static int nl80211_set_key(struct sk_buff *skb, struct genl_info *info)
 		}
 
 		err = nl80211_key_allowed(dev->ieee80211_ptr);
-		if (err)
+		if (err) {
+			pr_info("set-key: key is not allowed (!key.def), err: %d\n", err);
 			goto out;
+		}
 
 		err = rdev_set_default_mgmt_key(rdev, dev, key.idx);
-		if (err)
+		if (err) {
+			pr_info("set-key, rdev-set-default-mgt-key had failured: %d\n", err);
 			goto out;
+		}
 
 #ifdef CONFIG_CFG80211_WEXT
 		dev->ieee80211_ptr->wext.default_mgmt_key = key.idx;
@@ -3005,11 +3021,15 @@ static int nl80211_new_key(struct sk_buff *skb, struct genl_info *info)
 	const u8 *mac_addr = NULL;
 
 	err = nl80211_parse_key(info, &key);
-	if (err)
+	if (err) {
+		pr_info("new-key:  parse failed: %d\n", err);
 		return err;
+	}
 
-	if (!key.p.key)
+	if (!key.p.key) {
+		pr_info("new-key:  key.p.key is NULL\n");
 		return -EINVAL;
+	}
 
 	if (info->attrs[NL80211_ATTR_MAC])
 		mac_addr = nla_data(info->attrs[NL80211_ATTR_MAC]);
@@ -3023,23 +3043,32 @@ static int nl80211_new_key(struct sk_buff *skb, struct genl_info *info)
 
 	/* for now */
 	if (key.type != NL80211_KEYTYPE_PAIRWISE &&
-	    key.type != NL80211_KEYTYPE_GROUP)
+	    key.type != NL80211_KEYTYPE_GROUP) {
+		pr_info("new-key: invalid key type: %d\n", key.type);
 		return -EINVAL;
+	}
 
 	if (!rdev->ops->add_key)
 		return -EOPNOTSUPP;
 
 	if (cfg80211_validate_key_settings(rdev, &key.p, key.idx,
 					   key.type == NL80211_KEYTYPE_PAIRWISE,
-					   mac_addr))
+					   mac_addr)) {
+		pr_info("new-key:  validate settings failed\n");
 		return -EINVAL;
+	}
 
 	wdev_lock(dev->ieee80211_ptr);
 	err = nl80211_key_allowed(dev->ieee80211_ptr);
-	if (!err)
+	if (!err) {
 		err = rdev_add_key(rdev, dev, key.idx,
 				   key.type == NL80211_KEYTYPE_PAIRWISE,
 				    mac_addr, &key.p);
+		if (err)
+			pr_info("new-key:  rdev-add-key failed: %d\n", err);
+	} else {
+		pr_info("new-key:  key-allowed failed: %d\n", err);
+	}
 	wdev_unlock(dev->ieee80211_ptr);
 
 	return err;
