@@ -149,6 +149,11 @@ struct wmi_ops {
 					      u32 num_ac);
 	struct sk_buff *(*gen_sta_keepalive)(struct ath10k *ar,
 					     const struct wmi_sta_keepalive_arg *arg);
+	struct sk_buff *(*gen_adaptive_qcs)(struct ath10k *ar, bool enable);
+	struct sk_buff *(*gen_pdev_enable_adaptive_cca)(struct ath10k *ar,
+							u8 enable,
+							int detect_level,
+							u32 detect_margin);
 };
 
 int ath10k_wmi_cmd_send(struct ath10k *ar, struct sk_buff *skb, u32 cmd_id);
@@ -1061,4 +1066,21 @@ ath10k_wmi_sta_keepalive(struct ath10k *ar,
 	return ath10k_wmi_cmd_send(ar, skb, cmd_id);
 }
 
+static inline int
+ath10k_wmi_pdev_enable_adaptive_cca(struct ath10k *ar, u8 enable,
+				    int detect_level, u32 detect_margin)
+{
+	struct sk_buff *skb;
+
+	if (!ar->wmi.ops->gen_pdev_enable_adaptive_cca)
+		return -EOPNOTSUPP;
+
+	skb = ar->wmi.ops->gen_pdev_enable_adaptive_cca(ar,
+			enable, detect_level, detect_margin);
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
+
+	return ath10k_wmi_cmd_send(ar, skb,
+			ar->wmi.cmd->pdev_enable_adaptive_cca_cmdid);
+}
 #endif

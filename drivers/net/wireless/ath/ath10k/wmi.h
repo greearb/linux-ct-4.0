@@ -552,6 +552,8 @@ struct wmi_cmd_map {
 	u32 gpio_output_cmdid;
 	u32 pdev_get_temperature_cmdid;
 	u32 vdev_set_wmm_params_cmdid;
+	u32 adaptive_qcs_cmdid;
+	u32 pdev_enable_adaptive_cca_cmdid;
 };
 
 /*
@@ -1163,6 +1165,9 @@ enum wmi_10_2_cmd_id {
 	WMI_10_2_VDEV_ATF_REQUEST_CMDID,
 	WMI_10_2_PEER_ATF_REQUEST_CMDID,
 	WMI_10_2_PDEV_GET_TEMPERATURE_CMDID,
+	WMI_10_2_MU_CAL_START_CMDID,
+	WMI_10_2_SET_LTEU_CONFIG_CMDID,
+	WMI_10_2_SET_CCA_PARAMS,
 	WMI_10_2_PDEV_UTF_CMDID = WMI_10_2_END_CMDID - 1,
 };
 
@@ -4924,6 +4929,12 @@ struct wmi_rdy_ev_arg {
 struct wmi_pdev_temperature_event {
 	/* temperature value in Celcius degree */
 	__le32 temperature;
+} __packed;
+
+struct wmi_pdev_set_adaptive_cca_params {
+	__le32 enable;
+	__le32 cca_detect_level;
+	__le32 cca_detect_margin;
 } __packed;
 
 struct ath10k;

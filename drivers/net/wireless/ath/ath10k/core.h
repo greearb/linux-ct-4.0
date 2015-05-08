@@ -477,11 +477,17 @@ enum ath10k_fw_features {
 	 * encryption (ie, commercial version of CT firmware) */
 	ATH10K_FW_FEATURE_CT_RXSWCRYPT = 6,
 
+	/* Don't trust error code from otp.bin */
+	ATH10K_FW_FEATURE_IGNORE_OTP_RESULT = 7,
+
+	/* Firmware has support for adaptive CCA */
+	ATH10K_FW_FEATURE_HAS_ADAPTIVE_CCA = 8,
+
 	/* tx-status has the noack bits (CT firmware version 14 and higher ) */
 	ATH10K_FW_FEATURE_HAS_TXSTATUS_NOACK = 30,
 
 	/* keep last */
-	ATH10K_FW_FEATURE_COUNT,
+	ATH10K_FW_FEATURE_COUNT
 };
 
 enum ath10k_dev_flags {
@@ -755,6 +761,8 @@ struct ath10k {
 	} stats;
 
 	struct ath10k_thermal thermal;
+
+	bool ath10k_adaptive_cca_enable;
 
 	/* must be last */
 	u8 drv_priv[0] __aligned(sizeof(void *));

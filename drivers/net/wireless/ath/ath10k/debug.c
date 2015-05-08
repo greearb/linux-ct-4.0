@@ -2384,6 +2384,55 @@ static const struct file_operations fops_pktlog_filter = {
 	.open = simple_open
 };
 
+static ssize_t ath10k_write_adaptive_cca_enable(struct file *file,
+						const char __user *ubuf,
+						size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	u8 enable;
+	int ret = 0;
+
+	if (kstrtou8_from_user(ubuf, count, 0, &enable))
+		return -EINVAL;
+
+	if (!test_bit(ATH10K_FW_FEATURE_HAS_ADAPTIVE_CCA, ar->fw_features)) {
+		ath10k_warn(ar, "firmware %s do not support adaptive cca\n",
+			    ar->hw->wiphy->fw_version);
+		return -ENOTSUPP;
+	}
+
+	mutex_lock(&ar->conf_mutex);
+	if (enable != ar->ath10k_adaptive_cca_enable) {
+		ar->ath10k_adaptive_cca_enable = enable;
+		ret = ath10k_wmi_pdev_enable_adaptive_cca(ar, enable, 0, 0);
+	}
+	mutex_unlock(&ar->conf_mutex);
+
+	return ret ?: count;
+}
+
+static ssize_t ath10k_read_adaptive_cca_enable(struct file *file,
+					       char __user *ubuf,
+					       size_t count, loff_t *ppos)
+{
+	char buf[32];
+	struct ath10k *ar = file->private_data;
+	int len = 0;
+
+	mutex_lock(&ar->conf_mutex);
+	len = scnprintf(buf, sizeof(buf) - len, "%d\n",
+			ar->ath10k_adaptive_cca_enable);
+	mutex_unlock(&ar->conf_mutex);
+
+	return simple_read_from_buffer(ubuf, count, ppos, buf, len);
+}
+
+static const struct file_operations fops_cca_detect_enable = {
+	.read = ath10k_read_adaptive_cca_enable,
+	.write = ath10k_write_adaptive_cca_enable,
+	.open = simple_open
+};
+
 int ath10k_debug_create(struct ath10k *ar)
 {
 	ar->debug.fw_crash_data = vzalloc(sizeof(*ar->debug.fw_crash_data));
@@ -2490,6 +2539,9 @@ int ath10k_debug_register(struct ath10k *ar)
 
 	debugfs_create_file("pktlog_filter", S_IRUGO | S_IWUSR,
 			    ar->debug.debugfs_phy, ar, &fops_pktlog_filter);
+
+	debugfs_create_file("adaptive_cca_enable", S_IRUGO | S_IWUSR,
+			    ar->debug.debugfs_phy, ar, &fops_cca_detect_enable);
 
 	return 0;
 }
