@@ -424,6 +424,7 @@ int ath10k_htt_tx(struct ath10k_htt *htt, struct sk_buff *msdu)
 	u32 frags_paddr;
 	bool use_frags;
 	unsigned int htt_transfer_id;
+	int skb_len;
 
 	res = ath10k_htt_tx_inc_pending(htt);
 	if (res)
@@ -539,13 +540,14 @@ int ath10k_htt_tx(struct ath10k_htt *htt, struct sk_buff *msdu)
 	skb_cb->htt.txbuf->cmd_tx.peerid = __cpu_to_le16(HTT_INVALID_PEERID);
 	skb_cb->htt.txbuf->cmd_tx.freq = __cpu_to_le16(skb_cb->htt.freq);
 
+	skb_len = msdu->len;
 	trace_ath10k_htt_tx(ar, msdu_id, msdu->len, vdev_id, tid);
 	ath10k_dbg(ar, ATH10K_DBG_HTT,
 		   "htt tx flags0 %hhu flags1 %hu len %d id %hu frags_paddr %08x, msdu_paddr %08x vdev %hhu tid %hhu freq %hu\n",
-		   flags0, flags1, msdu->len, msdu_id, frags_paddr,
+		   flags0, flags1, skb_len, msdu_id, frags_paddr,
 		   (u32)skb_cb->paddr, vdev_id, tid, skb_cb->htt.freq);
 	ath10k_dbg_dump(ar, ATH10K_DBG_HTT_DUMP, NULL, "htt tx msdu: ",
-			msdu->data, msdu->len);
+			msdu->data, skb_len);
 	trace_ath10k_tx_hdr(ar, msdu->data, msdu->len);
 	trace_ath10k_tx_payload(ar, msdu->data, msdu->len);
 
@@ -569,6 +571,10 @@ int ath10k_htt_tx(struct ath10k_htt *htt, struct sk_buff *msdu)
 			       sg_items, ARRAY_SIZE(sg_items));
 	if (res)
 		goto err_unmap_msdu;
+
+#ifdef CONFIG_ATH10K_DEBUGFS
+	ar->debug.tx_bytes += skb_len;
+#endif
 
 	return 0;
 

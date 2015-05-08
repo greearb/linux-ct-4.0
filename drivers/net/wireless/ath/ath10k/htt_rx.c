@@ -1323,6 +1323,9 @@ static void ath10k_htt_rx_h_mpdu(struct ath10k *ar,
 		   has_peer_idx_invalid, enctype);
 	*/
 	skb_queue_walk(amsdu, msdu) {
+#ifdef CONFIG_ATH10K_DEBUGFS
+		ar->debug.rx_bytes += msdu->len;
+#endif
 		ath10k_htt_rx_h_csum_offload(msdu);
 		ath10k_htt_rx_h_undecap(ar, msdu, status, first_hdr, enctype,
 					is_decrypted);
