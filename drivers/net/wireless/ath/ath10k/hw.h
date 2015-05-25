@@ -428,6 +428,9 @@ struct ath10k_pktlog_hdr {
 #define SCRATCH_3_ADDRESS			ar->regs->scratch_3_address
 #define CPU_INTR_ADDRESS			0x0010
 
+/* Cycle counters are running at 88MHz */
+#define CCNT_TO_MSEC(x) ((x) / 88000)
+
 /* Firmware indications to the Host via SCRATCH_3 register. */
 #define FW_INDICATOR_ADDRESS	(SOC_CORE_BASE_ADDRESS + SCRATCH_3_ADDRESS)
 #define FW_IND_EVENT_PENDING			1

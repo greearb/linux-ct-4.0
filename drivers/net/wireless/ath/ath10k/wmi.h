@@ -4706,9 +4706,6 @@ struct wmi_peer_sta_kickout_event {
 
 #define WMI_CHAN_INFO_FLAG_COMPLETE BIT(0)
 
-/* FIXME: empirically extrapolated */
-#define WMI_CHAN_INFO_MSEC(x) ((x) / 76595)
-
 /* Beacon filter wmi command info */
 #define BCN_FLT_MAX_SUPPORTED_IES	256
 #define BCN_FLT_MAX_ELEMS_IE_LIST	(BCN_FLT_MAX_SUPPORTED_IES / 32)
