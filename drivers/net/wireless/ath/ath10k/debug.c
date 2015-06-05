@@ -1857,11 +1857,15 @@ exit:
 /* This generally cooresponds to the debugfs fw_stats file */
 static const char ath10k_gstrings_stats[][ETH_GSTRING_LEN] = {
 	"tx_pkts_nic",
-	"tx_bytes_nic", // from driver, firmware does not keep this stat.
+	"tx_bytes_nic", /* from driver, firmware does not keep this stat. */
 	"rx_pkts_nic",
-	"rx_bytes_nic", // from driver, firmware does not keep this stat.
+	"rx_bytes_nic", /* from driver, firmware does not keep this stat. */
 	"d_noise_floor",
-	"d_cycle_count",
+	"d_cycle_count", /* this is duty cycle counter, basically channel-time. 88MHz clock */
+	"d_tx_cycle_count", /* tx cycle count */
+	"d_rx_cycle_count", /* rx cycle count */
+	"d_busy_count", /* Total channel busy time cycles (called 'clear' by firmware) */
+	"d_flags", /* 0x1:  hw has shifted cycle-count wrap, see ath10k_hw_fill_survey_time */
 	"d_phy_error",
 	"d_rts_bad",
 	"d_rts_good",
@@ -1933,6 +1937,7 @@ void ath10k_debug_get_et_stats(struct ieee80211_hw *hw,
 	static const struct ath10k_fw_stats_pdev zero_stats = {};
 	const struct ath10k_fw_stats_pdev *pdev_stats;
 	int i = 0, ret;
+	u64 d_flags = 0;
 
 	mutex_lock(&ar->conf_mutex);
 
@@ -1956,12 +1961,19 @@ void ath10k_debug_get_et_stats(struct ieee80211_hw *hw,
 
 	spin_lock_bh(&ar->data_lock);
 
+	if (ar->hw_params.has_shifted_cc_wraparound)
+		d_flags |= 0x1;
+
 	data[i++] = pdev_stats->hw_reaped; /* ppdu reaped */
 	data[i++] = ar->debug.tx_bytes;
 	data[i++] = pdev_stats->htt_mpdus;
 	data[i++] = ar->debug.rx_bytes;
 	data[i++] = pdev_stats->ch_noise_floor;
 	data[i++] = pdev_stats->cycle_count;
+	data[i++] = pdev_stats->tx_frame_count;
+	data[i++] = pdev_stats->rx_frame_count;
+	data[i++] = pdev_stats->rx_clear_count; /* yes, this appears to actually be 'busy' count */
+	data[i++] = d_flags; /* give user-space a chance to decode cycle counters */
 	data[i++] = pdev_stats->phy_err_count;
 	data[i++] = pdev_stats->rts_bad;
 	data[i++] = pdev_stats->rts_good;
