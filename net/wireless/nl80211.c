@@ -12992,6 +12992,7 @@ void nl80211_send_ap_stopped(struct wireless_dev *wdev)
 		goto out;
 
 	if (nla_put_u32(msg, NL80211_ATTR_WIPHY, rdev->wiphy_idx) ||
+	    nla_put_string(msg, NL80211_ATTR_IFNAME, wdev->netdev->name) ||
 	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, wdev->netdev->ifindex) ||
 	    nla_put_u64(msg, NL80211_ATTR_WDEV, wdev_id(wdev)))
 		goto out;
