@@ -2213,6 +2213,9 @@ static u8 ath10k_tx_h_get_tid(struct ieee80211_hdr *hdr)
 	if (ieee80211_is_mgmt(hdr->frame_control))
 		return HTT_DATA_TX_EXT_TID_MGMT;
 
+	if (ieee80211_is_nullfunc(hdr->frame_control))
+		return HTT_DATA_TX_EXT_TID_NON_QOS_MCAST_BCAST;
+
 	if (!ieee80211_is_data_qos(hdr->frame_control))
 		return HTT_DATA_TX_EXT_TID_NON_QOS_MCAST_BCAST;
 
