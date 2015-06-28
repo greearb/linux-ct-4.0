@@ -983,6 +983,7 @@ enum wmi_10x_cmd_id {
 	WMI_10X_GPIO_CONFIG_CMDID,
 	WMI_10X_GPIO_OUTPUT_CMDID,
 
+	WMI_PDEV_SET_SPECIAL_CMDID = WMI_10X_END_CMDID - 101, /* CT only:  special hack (cts/slot/cifs/ack timers, etc) */
 	WMI_NOP = WMI_10X_END_CMDID - 100, /* CT only:  wmi transport keep-alive, basically */
 
 	WMI_10X_PDEV_UTF_CMDID = WMI_10X_END_CMDID - 1,
@@ -4930,6 +4931,25 @@ struct wmi_pdev_temperature_event {
 	/* temperature value in Celcius degree */
 	__le32 temperature;
 } __packed;
+
+/* CT firmware only, and only builds after June 26, 2015 */
+struct wmi_pdev_set_special_cmd {
+#define SET_SPECIAL_ID_ACK_CTS 0 /* set ack-cts-timeout register */
+#define SET_SPECIAL_ID_SLOT    1 /* set slot-duration register */
+#define SET_SPECIAL_ID_SIFS    2 /* set sifs-duration register */
+#define SET_SPECIAL_ID_THRESH62_EXT 3 /* set PHY_BB_EXT_CHAN_PWR_THR_1_THRESH62_EXT register field...
+				       * increasing this to 42 helps at least
+				       * one customer pass regulatory testing, for instance.  This is
+				       * same register/field as: PHY_BB_EXT_CHAN_PWR_THR_1_THR_CCA_EXT40
+				       * this is an 8-bit value.
+				       */
+
+    __le32 id;
+    __le32 val;
+    __le32 extra1;
+    __le32 extra2;
+};
+int ath10k_wmi_pdev_set_special(struct ath10k *ar, u32 id, u32 val);
 
 struct wmi_pdev_set_adaptive_cca_params {
 	__le32 enable;
