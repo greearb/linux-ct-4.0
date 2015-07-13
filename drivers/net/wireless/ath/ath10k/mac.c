@@ -2309,7 +2309,7 @@ static void ath10k_tx_htt(struct ath10k *ar, struct sk_buff *skb)
 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
 	int ret = 0;
 
-	if (ar->htt.target_version_major >= 3) {
+	if (ar->all_pkts_htt) {
 		/* Since HTT 3.0 there is no separate mgmt tx command */
 		ret = ath10k_htt_tx(&ar->htt, skb);
 		goto exit;
