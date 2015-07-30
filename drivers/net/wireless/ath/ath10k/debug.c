@@ -2661,7 +2661,7 @@ void ath10k_dbg_print_fw_dbg_buffer(struct ath10k *ar, __le32 *ibuf, int len,
 	 */
 	int q = 0;
 
-	printk("%sATH10K_DBG_BUFFER:\n", lvl);
+	dev_printk(lvl, ar->dev, "ath10k_pci ATH10K_DBG_BUFFER:\n");
 	while (q < len) {
 		if (q + 8 <= len) {
 			printk("%sath10k: [%04d]: %08X %08X %08X %08X %08X %08X %08X %08X\n",
@@ -2720,6 +2720,6 @@ void ath10k_dbg_print_fw_dbg_buffer(struct ath10k *ar, __le32 *ibuf, int len,
 		}
 	}/* while */
 
-	printk("%sATH10K_END\n", lvl);
+	dev_printk(lvl, ar->dev, "ATH10K_END\n");
 }
 EXPORT_SYMBOL(ath10k_dbg_print_fw_dbg_buffer);
