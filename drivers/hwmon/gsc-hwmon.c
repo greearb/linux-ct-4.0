@@ -20,6 +20,7 @@
 #include <linux/slab.h>
 
 #define DRV_VERSION "0.2"
+#define I2C_RETRIES     3
 
 enum chips { gsc };
 
@@ -79,50 +80,99 @@ struct gsc_data {
 	enum chips		type;
 };
 
+
+/**
+ * gsc_i2c_write - Writes a register to GSC with retries
+ * @client: i2c client
+ * @reg: register address
+ * @val: value to write
+ *
+ * Returns the result of operation - 0 is success
+ */
+static int gsc_i2c_write(struct i2c_client *client, u8 reg, u8 val)
+{
+	int retry, ret;
+
+	for (retry = 0; retry < I2C_RETRIES; retry++) {
+		ret = i2c_smbus_write_byte_data(client, reg, val);
+		/*
+		 * -EAGAIN returned when the i2c host controller is busy
+		 * -EIO returned when i2c device is busy
+		 */
+		if (ret != -EAGAIN && ret != -EIO)
+			break;
+	}
+	if (ret < 0) {
+		dev_err(&client->dev, ">> 0x%02x %d\n", reg, ret);
+		return ret;
+	}
+	dev_dbg(&client->dev, ">> 0x%02x=0x%02x (%d)\n", reg,
+		val, retry);
+
+	return 0;
+}
+
+/**
+ * gsc_i2c_read - Reads register from GSC with retries
+ * @client: i2c client
+ * @reg: register address
+ * @val: value to write
+ *
+ * Returns 0 on success
+ */
+static int gsc_i2c_read(struct i2c_client *client, u8 reg, u8 *val)
+{
+	int retry, ret;
+
+	for (retry = 0; retry < I2C_RETRIES; retry++) {
+		ret = i2c_smbus_read_byte_data(client, reg);
+		/*
+		 * -EAGAIN returned when the i2c host controller is busy
+		 * -EIO returned when i2c device is busy
+		 */
+		if (ret != -EAGAIN && ret != -EIO)
+			break;
+	}
+	if (ret < 0) {
+		dev_err(&client->dev, "<< 0x%02x %d\n", reg, ret);
+		return ret;
+	}
+
+	*val = ret & 0xff;
+	dev_dbg(&client->dev, "<< 0x%02x=0x%02x (%d)\n", reg,
+		*val, retry);
+
+	return 0;
+}
+
 /* All registers are word-sized, except for the configuration registers.
  * AD7418 uses a high-byte first convention. Do NOT use those functions to
  * access the configuration registers CONF and CONF2, as they are byte-sized.
  */
 static inline int gsc_read(struct i2c_client *client, u8 reg)
 {
-#if 0
-	int adc = 0;
-	if (reg == GSC_REG_TEMP_IN || reg > GSC_REG_CURRENT)
-	{
-		adc |= i2c_smbus_read_byte_data(client, reg);
-		adc |= i2c_smbus_read_byte_data(client, reg + 1) << 8;
-		if (adc > 0x8000) { /* convert from two's-complement */
-			adc = adc - 0xffff;
-		}
-		return adc;
-	}
-	else
-	{
-		adc |= i2c_smbus_read_byte_data(client, reg);
-		adc |= i2c_smbus_read_byte_data(client, reg + 1) << 8;
-		adc |= i2c_smbus_read_byte_data(client, reg + 2) << 16;
-		return adc;
-	}
-#else
-	int ret, retry = 3;
-	int adc = 0;
+	unsigned int adc, i, err;
+	u8 b;
 
-	if (reg == GSC_REG_TEMP_IN || reg > GSC_REG_CURRENT) {
-		while (--retry) {
-			ret = i2c_smbus_read_word_data(client, reg);
-			if (!ret)
-				return adc;
-		}
-	} else {
+	if (reg == GSC_REG_TEMP_IN || reg > GSC_REG_CURRENT)
+		i = 2;
+	else
+		i = 3;
+
+	adc = 0;
+	while (i-- > 0) {
+		err = gsc_i2c_read(client, reg + i, &b);
+		if (err)
+			return err;
+		adc |= (b << (8*i));
 	}
-	return -1;
-#endif
+	return adc;
 }
 
 static inline int gsc_write(struct i2c_client *client, u8 reg, u16 value)
 {
-	i2c_smbus_write_byte_data(client, reg, value & 0xff);
-	i2c_smbus_write_byte_data(client, reg + 1, ((value >> 8) & 0xff));
+	gsc_i2c_write(client, reg, value & 0xff);
+	gsc_i2c_write(client, reg + 1, ((value >> 8) & 0xff));
 	return 1;
 }
 
