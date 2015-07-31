@@ -115,6 +115,7 @@ static inline int gsc_read(struct i2c_client *client, u8 reg)
 		}
 	} else {
 	}
+	return -1;
 #endif
 }
 

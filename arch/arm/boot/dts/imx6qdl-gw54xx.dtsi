@@ -202,6 +202,11 @@
 		compatible = "dallas,ds1672";
 		reg = <0x68>;
 	};
+
+	gsc_hwmon: hwmon@29 {
+		compatible = "gw,gsc";
+		reg = <0x29>;
+	};
 };
 
 &i2c2 {
