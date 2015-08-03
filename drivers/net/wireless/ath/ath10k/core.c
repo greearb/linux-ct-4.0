@@ -819,6 +819,18 @@ fw_ie_bss_info_ct:
 		goto err;
 	}
 
+	/* Only CT firmware has BSS sutff, so we can use this to fix up
+	 * flags for backwards and fowards compat with older/newer CT firmware.
+	 * (upstream stole some bits it was using)
+	 */
+	if (ar->fw.rom_bss_addr) {
+		if (test_bit(ATH10K_FW_FEATURE_WMI_10X_CT_OLD, ar->fw_features))
+			__set_bit(ATH10K_FW_FEATURE_WMI_10X_CT, ar->fw_features);
+
+		if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT_OLD, ar->fw_features))
+			__set_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT, ar->fw_features);
+	}
+
 	/* now fetch the board file */
 	if (ar->hw_params.fw.board == NULL) {
 		ath10k_err(ar, "board data file not defined");
