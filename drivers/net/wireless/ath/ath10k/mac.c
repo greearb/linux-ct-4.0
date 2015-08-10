@@ -4494,6 +4494,13 @@ static void ath10k_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	bool skip;
 	int ret;
 	u8 peer_addr[ETH_ALEN] = {0};
+	struct ath10k_vif *arvif = NULL;
+
+	if (vif)
+		arvif = ath10k_vif_to_arvif(vif);
+
+	ath10k_dbg(ar, ATH10K_DBG_MAC, "mac flush vdev %d drop %d queues 0x%x\n",
+		   arvif ? arvif->vdev_id : -1, drop, queues);
 
 	/* mac80211 doesn't care if we really xmit queued frames or not
 	 * we'll collect those frames either way if we stop/delete vdevs */
@@ -4504,6 +4511,17 @@ static void ath10k_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 
 	if (ar->state == ATH10K_STATE_WEDGED)
 		goto skip;
+
+	/* NOTE:  As of Aug 10, CT firmware supports flushing a single vdev
+	 * by passing the vdev_id, and leaving peer_addr all zeros.  But the logic
+	 * below would need to be changed to check if all pkts for a particular
+	 * vdev have been flushed instead of the entire tx-q being flushed.
+	 *
+	 * In addition, this logic could be called even if 'drop' is requested.
+	 * This might make the system act more optimally.
+	 *
+	 * --Ben
+	 */
 
 	/* If we are CT firmware, ask it to flush all tids on all peers on
 	 * all vdevs.  Normal firmware will just crash if you do this.
