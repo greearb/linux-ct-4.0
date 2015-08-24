@@ -413,8 +413,16 @@ struct ath10k_debug {
 
 	struct ath10k_fw_crash_data *fw_crash_data;
 
-	u64 tx_bytes; /* counter, firmware does not offer this stat */
-	u64 rx_bytes; /* counter, firmware does not offer this stat */
+	/* These counters are kept in software. */
+	u64 rx_bytes; /* counter, total received bytes */
+
+	u32 tx_ok; /* counter, OK tx status count. */
+	u32 tx_noack; /* counter, no-ack tx status count. */
+	u32 tx_discard; /* counter, discard tx status count. */
+	u64 tx_ok_bytes;
+	u64 tx_noack_bytes;
+	u64 tx_discard_bytes;
+	u64 tx_bytes; /* counter, total sent to firmware */
 };
 
 enum ath10k_state {

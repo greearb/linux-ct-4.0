@@ -125,6 +125,10 @@ void ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 	trace_ath10k_txrx_tx_unref(ar, tx_done->msdu_id);
 
 	if (tx_done->discard) {
+#ifdef CONFIG_ATH10K_DEBUG
+		ar->debug.tx_discard++;
+		ar->debug.tx_discard_bytes += msdu->len;
+#endif
 		ieee80211_free_txskb(htt->ar->hw, msdu);
 		goto exit;
 	}
@@ -148,8 +152,19 @@ void ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 		info->status.rates[0].idx = -1;
 	}
 
-	if (tx_done->no_ack)
+	if (tx_done->no_ack) {
+#ifdef CONFIG_ATH10K_DEBUG
+		ar->debug.tx_noack++;
+		ar->debug.tx_noack_bytes += msdu->len;
+#endif
 		info->flags &= ~IEEE80211_TX_STAT_ACK;
+	}
+	else {
+#ifdef CONFIG_ATH10K_DEBUG
+		ar->debug.tx_ok++;
+		ar->debug.tx_ok_bytes += msdu->len;
+#endif
+	}
 
 	ieee80211_tx_status(htt->ar->hw, msdu);
 	/* we do not own the msdu anymore */
