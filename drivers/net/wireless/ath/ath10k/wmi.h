@@ -4946,6 +4946,17 @@ struct wmi_pdev_set_special_cmd {
 				       * same register/field as: PHY_BB_EXT_CHAN_PWR_THR_1_THR_CCA_EXT40
 				       * this is an 8-bit value.
 				       */
+#define SET_SPECIAL_ID_NOISE_FLR_THRESH 4 /* Set some CCA related values in the eeprom struct.  Over-rides existing values.
+					   * BE CAREFUL!  This could put your system out of spec.  It can also put it in
+					   * spec when the eeprom values are dodgy.
+                                           * See debug.c, ath10k_read_ct_special for details.
+                                           */
+#define CT_CCA_TYPE_MIN0 0
+#define CT_CCA_TYPE_MIN1 1
+#define CT_CCA_TYPE_MIN2 2
+#define CT_CCA_TYPE_NOISE_FLOOR 3
+#define CT_CCA_TYPE_EN_MINCCAPWR 4
+#define CT_CCA_TYPE_MAX 4 /* change as more types are added */
 
     __le32 id;
     __le32 val;
