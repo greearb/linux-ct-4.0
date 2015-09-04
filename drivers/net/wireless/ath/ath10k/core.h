@@ -342,6 +342,7 @@ struct ath10k_vif {
 	int num_legacy_stations;
 	int txpower;
 	struct wmi_wmm_params_all_arg wmm_params;
+	struct cfg80211_bitrate_mask bitrate_mask;
 };
 
 struct ath10k_vif_iter {
