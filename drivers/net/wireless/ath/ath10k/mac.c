@@ -2125,6 +2125,21 @@ static const u32 ath10k_smps_map[] = {
 	[WLAN_HT_CAP_SM_PS_DISABLED] = WMI_PEER_SMPS_PS_NONE,
 };
 
+static void ath10k_fetch_rc_txctl(struct ath10k *ar, struct ath10k_vif *arvif,
+				  const u8 *addr)
+{
+	if (test_bit(ATH10K_FW_FEATURE_CT_RATEMASK, ar->fw_features)) {
+		/* Firmware may cache rate-ctrl logic in host RAM.  Before we can set it,
+		 * it must be DMA'd to firmware RAM.  CT Firmware offers this API to cause
+		 * firmware to request it.  It is a race either way, but this should make
+		 * it work more often.  Last argument is ignored by firmware.
+		 */
+		ath10k_wmi_peer_set_param(ar, arvif->vdev_id, addr,
+					  WMI_PEER_FETCH_RC, 0);
+		msleep(1);
+	}
+}
+
 static int ath10k_setup_peer_smps(struct ath10k *ar, struct ath10k_vif *arvif,
 				  const u8 *addr,
 				  const struct ieee80211_sta_ht_cap *ht_cap)
@@ -2139,6 +2154,8 @@ static int ath10k_setup_peer_smps(struct ath10k *ar, struct ath10k_vif *arvif,
 
 	if (smps >= ARRAY_SIZE(ath10k_smps_map))
 		return -EINVAL;
+
+	ath10k_fetch_rc_txctl(ar, arvif, addr);
 
 	return ath10k_wmi_peer_set_param(ar, arvif->vdev_id, addr,
 					 WMI_PEER_SMPS_STATE,
@@ -2186,16 +2203,7 @@ static void ath10k_bss_assoc(struct ieee80211_hw *hw,
 
 	rcu_read_unlock();
 
-	if (test_bit(ATH10K_FW_FEATURE_CT_RATEMASK, ar->fw_features)) {
-		/* Firmware may cache rate-ctrl logic in host RAM.  Before we can set it,
-		 * it must be DMA'd to firmware RAM.  CT Firmware offers this API to cause
-		 * firmware to request it.  It is a race either way, but this should make
-		 * it work more often.  Last argument is ignored by firmware.
-		 */
-		ath10k_wmi_peer_set_param(ar, arvif->vdev_id, ap_sta->addr,
-					  WMI_PEER_FETCH_RC, 0);
-		msleep(1);
-	}
+	ath10k_fetch_rc_txctl(ar, arvif, ap_sta->addr);
 
 	ret = ath10k_wmi_peer_assoc(ar, &peer_arg);
 	if (ret) {
@@ -2274,16 +2282,7 @@ static int ath10k_station_assoc(struct ath10k *ar,
 		return ret;
 	}
 
-	if (test_bit(ATH10K_FW_FEATURE_CT_RATEMASK, ar->fw_features)) {
-		/* Firmware may cache rate-ctrl logic in host RAM.  Before we can set it,
-		 * it must be DMA'd to firmware RAM.  CT Firmware offers this API to cause
-		 * firmware to request it.  It is a race either way, but this should make
-		 * it work more often.  Last argument is ignored by firmware.
-		 */
-		ath10k_wmi_peer_set_param(ar, arvif->vdev_id, sta->addr,
-					  WMI_PEER_FETCH_RC, 0);
-		msleep(1);
-	}
+	ath10k_fetch_rc_txctl(ar, arvif, sta->addr);
 
 	ret = ath10k_wmi_peer_assoc(ar, &peer_arg);
 	if (ret) {
@@ -4366,6 +4365,11 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 	}
 
 	if (changed & IEEE80211_RC_SMPS_CHANGED) {
+		static int hack_me_once = 1;
+		if (hack_me_once) {
+			ath10k_fetch_rc_txctl(ar, arvif, sta->addr);
+			hack_me_once = 0;
+		}
 		ath10k_dbg(ar, ATH10K_DBG_MAC, "mac update sta %pM smps %d\n",
 			   sta->addr, smps);
 
@@ -4377,6 +4381,7 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 	}
 
 	if (changed & IEEE80211_RC_SUPP_RATES_CHANGED ||
+	    changed & IEEE80211_RC_SMPS_CHANGED ||
 	    changed & IEEE80211_RC_NSS_CHANGED) {
 		ath10k_dbg(ar, ATH10K_DBG_MAC, "mac update sta %pM supp rates/nss\n",
 			   sta->addr);
