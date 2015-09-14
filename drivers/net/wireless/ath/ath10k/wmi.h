@@ -4516,7 +4516,12 @@ enum wmi_peer_param {
 	WMI_PEER_AUTHORIZE  = 0x3,
 	WMI_PEER_CHAN_WIDTH = 0x4,
 	WMI_PEER_NSS        = 0x5,
-	WMI_PEER_USE_4ADDR  = 0x6
+	WMI_PEER_USE_4ADDR  = 0x6,
+	WMI_PEER_FETCH_RC   = 0x10 /* Fetch rate-ctrl cache from host via DMA
+				    * Call this before setting rate-ctrl logic so that
+				    * firmware will have the firmware data in it's cache.
+				    * It is racy, but better than nothing.
+				    */
 };
 
 struct wmi_peer_set_param_cmd {
@@ -4620,6 +4625,8 @@ struct wmi_peer_set_q_empty_callback_cmd {
 
 struct wmi_common_peer_assoc_complete_cmd {
 	struct wmi_mac_addr peer_macaddr;
+#define WMI_ASSOC_FLG_EXT (1<<31) /* Extended info is defined, CT firmware ver 15+ only,
+				   * packed into vdev_id */
 	__le32 vdev_id;
 	__le32 peer_new_assoc; /* 1=assoc, 0=reassoc */
 	__le32 peer_associd; /* 16 LSBs */
@@ -4636,6 +4643,16 @@ struct wmi_common_peer_assoc_complete_cmd {
 	__le32 peer_vht_caps;
 	__le32 peer_phymode;
 	struct wmi_vht_rate_set peer_vht_rates;
+
+	/* CT firmware ver 15+ only */
+#define PEER_ASSOC_EXT_USE_OVERRIDES (1<<0)
+	__le32 ext_flags;
+	u8 rate_overrides[20]; /* There are 150 rates...this holds 160, and keeps
+				* things 32-bit aligned.  If rate_overrides_set is 1,
+				* any rate NOT specified in rate_overrides will be
+				* disabled.
+				*/
+
 };
 
 struct wmi_main_peer_assoc_complete_cmd {
@@ -4678,6 +4695,10 @@ struct wmi_peer_assoc_complete_arg {
 	u32 peer_vht_caps;
 	enum wmi_phy_mode peer_phymode;
 	struct wmi_vht_rate_set_arg peer_vht_rates;
+
+	/* CT firmware only (beta-15 and higher ) */
+	bool has_rate_overrides;
+	u8 rate_overrides[20];
 };
 
 struct wmi_peer_add_wds_entry_cmd {
