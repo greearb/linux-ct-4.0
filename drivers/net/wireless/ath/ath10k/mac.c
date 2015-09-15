@@ -2277,6 +2277,142 @@ static void ath10k_bss_disassoc(struct ieee80211_hw *hw,
 	arvif->is_up = false;
 }
 
+/* Convert hw_rate from ratectrl to 'rate-code' that firmware
+ * can understand.
+ */
+static u8 ath10k_convert_hw_rate_to_rc(u8 hw_rate, int bitrate)
+{
+	int preamble;
+	if (ath10k_mac_bitrate_is_cck(bitrate))
+		preamble = WMI_RATE_PREAMBLE_CCK;
+	else
+		preamble = WMI_RATE_PREAMBLE_OFDM;
+
+	return (preamble << 6) | hw_rate;
+}
+
+static void ath10k_check_apply_special_rates(struct ath10k *ar,
+					     struct ath10k_vif *arvif)
+{
+	struct ieee80211_hw *hw = ar->hw;
+	const struct ieee80211_supported_band *sband;
+	u32 ratemask;
+	u8 mcast_rt = WMI_FIXED_RATE_NONE;
+	u8 bcast_rt = WMI_FIXED_RATE_NONE;
+	u8 mgt_rt = WMI_FIXED_RATE_NONE;
+	int i;
+	int ret;
+
+	int band = ar->hw->conf.chandef.chan->band;
+	sband = hw->wiphy->bands[band];
+	ratemask = arvif->bitrate_mask.control[band].legacy;
+
+	lockdep_assert_held(&ar->conf_mutex);
+
+	/* 10.1.467 Firmware defaults:
+	   5Ghz or p2p mode: 6Mbps mgt, bcast, mcast
+	   2.4Ghz: 1Mbps for mgt, 11Mbps for bcast, mcast
+	*/
+
+	/* Check for user-specified rates. */
+	if (arvif->mcast_rate[band] != WMI_FIXED_RATE_NONE)
+		mcast_rt = arvif->mcast_rate[band];
+
+	if (arvif->bcast_rate[band] != WMI_FIXED_RATE_NONE)
+		bcast_rt = arvif->bcast_rate[band];
+
+	if (arvif->mgt_rate[band] != WMI_FIXED_RATE_NONE)
+		mgt_rt = arvif->mgt_rate[band];
+
+	/* If we don't have user-specified rates, then find rates that work within
+	 * the configured ratemask.
+	 */
+
+	/* Mgt uses lowest available rate. */
+	if (mgt_rt == WMI_FIXED_RATE_NONE) {
+		for (i = 0; i < ath10k_g_rates_size; i++) {
+			if (ratemask & (1 << i)) {
+				/* found it */
+				mgt_rt = ath10k_convert_hw_rate_to_rc(sband->bitrates[i].hw_value,
+								      sband->bitrates[i].bitrate);
+				break;
+			}
+		}
+	}
+
+	if (band == IEEE80211_BAND_2GHZ) {
+		/* Use 11Mbps for mcast, bcast if possible, else fall back to first available. */
+		u8 first_rt = WMI_FIXED_RATE_NONE;
+		for (i = 0; i < ath10k_g_rates_size; i++) {
+			if (ratemask & (1 << i)) {
+				if (first_rt == WMI_FIXED_RATE_NONE)
+					first_rt = ath10k_convert_hw_rate_to_rc(sband->bitrates[i].hw_value,
+										sband->bitrates[i].bitrate);
+				if (sband->bitrates[i].bitrate == 110) {
+					if (bcast_rt == WMI_FIXED_RATE_NONE)
+						bcast_rt = ath10k_convert_hw_rate_to_rc(sband->bitrates[i].hw_value,
+											sband->bitrates[i].bitrate);
+					if (mcast_rt == WMI_FIXED_RATE_NONE)
+						mcast_rt = ath10k_convert_hw_rate_to_rc(sband->bitrates[i].hw_value,
+											sband->bitrates[i].bitrate);
+					goto found_preferred24;
+				}
+			}
+		}
+		/* If here, we did not find preferred rate, use first found. */
+		if (bcast_rt == WMI_FIXED_RATE_NONE)
+			bcast_rt = first_rt;
+		if (mcast_rt == WMI_FIXED_RATE_NONE)
+			mcast_rt = first_rt;
+	}
+
+found_preferred24:
+	if (band == IEEE80211_BAND_5GHZ) {
+		for (i = 0; i < ath10k_g_rates_size; i++) {
+			if (ratemask & (1 << i)) {
+				/* found it */
+				if (bcast_rt == WMI_FIXED_RATE_NONE)
+					bcast_rt = ath10k_convert_hw_rate_to_rc(sband->bitrates[i].hw_value,
+										sband->bitrates[i].bitrate);
+				if (mcast_rt == WMI_FIXED_RATE_NONE)
+					mcast_rt = ath10k_convert_hw_rate_to_rc(sband->bitrates[i].hw_value,
+										sband->bitrates[i].bitrate);
+				break;
+			}
+		}
+	}
+
+	ath10k_dbg(ar, ATH10K_DBG_MAC, "apply-special-rates: ratemask: 0x%x mcast: 0x%x  bcast: 0x%x  mgmt: 0x%x band: %d\n",
+		   ratemask, mcast_rt, bcast_rt, mgt_rt, band);
+
+	if (mcast_rt != WMI_FIXED_RATE_NONE) {
+		ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
+					  ar->wmi.vdev_param->mcast_data_rate,
+					  mcast_rt);
+		if (ret)
+			ath10k_warn(ar, "failed to set mcast rate param 0x%02x: %d\n",
+				    mcast_rt, ret);
+	}
+
+	if (bcast_rt != WMI_FIXED_RATE_NONE) {
+		ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
+					  ar->wmi.vdev_param->bcast_data_rate,
+					  bcast_rt);
+		if (ret)
+			ath10k_warn(ar, "failed to set bcast rate param 0x%02x: %d\n",
+				    bcast_rt, ret);
+	}
+
+	if (mgt_rt != WMI_FIXED_RATE_NONE) {
+		ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
+					  ar->wmi.vdev_param->mgmt_rate,
+					  mgt_rt);
+		if (ret)
+			ath10k_warn(ar, "failed to set mgt rate param 0x%02x: %d\n",
+				    mgt_rt, ret);
+	}
+}
+
 static int ath10k_station_assoc(struct ath10k *ar,
 				struct ieee80211_vif *vif,
 				struct ieee80211_sta *sta,
@@ -2300,6 +2436,8 @@ static int ath10k_station_assoc(struct ath10k *ar,
 	}
 
 	ath10k_fetch_rc_txctl(ar, arvif, sta->addr);
+
+	ath10k_check_apply_special_rates(ar, arvif);
 
 	ret = ath10k_wmi_peer_assoc(ar, &peer_arg);
 	if (ret) {
@@ -3598,6 +3736,10 @@ static int ath10k_add_interface(struct ieee80211_hw *hw,
 	mutex_lock(&ar->conf_mutex);
 
 	memset(arvif, 0, sizeof(*arvif));
+
+	memset(&arvif->bcast_rate, WMI_FIXED_RATE_NONE, sizeof(arvif->bcast_rate));
+	memset(&arvif->mcast_rate, WMI_FIXED_RATE_NONE, sizeof(arvif->mcast_rate));
+	memset(&arvif->mgt_rate, WMI_FIXED_RATE_NONE, sizeof(arvif->mgt_rate));
 
 	arvif->ar = ar;
 	arvif->vif = vif;
@@ -5191,7 +5333,8 @@ ath10k_mac_bitrate_mask_get_single_rate(struct ath10k *ar,
 }
 
 static int ath10k_mac_set_fixed_rate_params(struct ath10k_vif *arvif,
-					    u8 rate, u8 nss, u8 sgi)
+					    u8 rate, u8 nss, u8 sgi,
+					    enum ieee80211_band band)
 {
 	struct ath10k *ar = arvif->ar;
 	u32 vdev_param;
@@ -5206,6 +5349,17 @@ static int ath10k_mac_set_fixed_rate_params(struct ath10k_vif *arvif,
 		vdev_param = ar->set_rate_type;
 	else
 		vdev_param = ar->wmi.vdev_param->fixed_rate;
+
+	/* Store these fixed rates so that we know the user has specified the
+	 * rate and thus we should not do any automatic over-rides of the rates.
+	 */
+	if (vdev_param == ar->wmi.vdev_param->mgmt_rate)
+		arvif->mgt_rate[band] = rate;
+	else if (vdev_param == ar->wmi.vdev_param->bcast_data_rate)
+		arvif->bcast_rate[band] = rate;
+	else if (vdev_param == ar->wmi.vdev_param->mcast_data_rate)
+		arvif->mcast_rate[band] = rate;
+
 	ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id, vdev_param, rate);
 	if (ret) {
 		ath10k_warn(ar, "failed to set fixed rate (0x%x) param 0x%02x: %d\n",
@@ -5321,7 +5475,8 @@ static int ath10k_mac_op_set_bitrate_mask(struct ieee80211_hw *hw,
 	int ret;
 
 	ath10k_dbg(ar, ATH10K_DBG_MAC, "set bitrate mask, vid: %d  band: %d\n", arvif->vdev_id, band);
-	ath10k_dbg_print_bitrate_mask(ar, mask, band);
+	ath10k_dbg_print_bitrate_mask(ar, mask, 0);
+	ath10k_dbg_print_bitrate_mask(ar, mask, 1);
 
 	ht_mcs_mask = mask->control[band].ht_mcs;
 	vht_mcs_mask = mask->control[band].vht_mcs;
@@ -5338,10 +5493,12 @@ static int ath10k_mac_op_set_bitrate_mask(struct ieee80211_hw *hw,
 				    arvif->vdev_id, ret);
 			return ret;
 		}
+		arvif->bitrate_mask = *mask;
 	} else if (ath10k_mac_bitrate_mask_get_single_nss(ar, band, mask,
 							  &single_nss)) {
 		rate = WMI_FIXED_RATE_NONE;
 		nss = single_nss;
+		arvif->bitrate_mask = *mask;
 	} else {
 		rate = WMI_FIXED_RATE_NONE;
 		nss = min(ar->num_rf_chains,
@@ -5363,12 +5520,18 @@ static int ath10k_mac_op_set_bitrate_mask(struct ieee80211_hw *hw,
 
 	mutex_lock(&ar->conf_mutex);
 
-	ret = ath10k_mac_set_fixed_rate_params(arvif, rate, nss, sgi);
+	ret = ath10k_mac_set_fixed_rate_params(arvif, rate, nss, sgi, band);
 	if (ret) {
 		ath10k_warn(ar, "failed to set fixed rate params on vdev %i: %d\n",
 			    arvif->vdev_id, ret);
 		goto exit;
 	}
+
+	/* Setting the usable ratemask may have invalidated previous default
+	 * settings for the special rates (bcast, mcast, mgmt), so re-apply
+	 * them now.
+	 */
+	ath10k_check_apply_special_rates(ar, arvif);
 
 exit:
 	mutex_unlock(&ar->conf_mutex);
