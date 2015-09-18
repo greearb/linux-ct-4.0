@@ -2466,6 +2466,9 @@ static int ieee80211_set_bitrate_mask(struct wiphy *wiphy,
 	if (!ieee80211_sdata_running(sdata))
 		return -ENETDOWN;
 
+	memcpy(&sdata->cfg_bitrate_mask, mask, sizeof(*mask));
+	sdata->cfg_bitrate_mask_set = true;
+
 	if (local->hw.flags & IEEE80211_HW_HAS_RATE_CONTROL) {
 		ret = drv_set_bitrate_mask(local, sdata, mask);
 		if (ret)

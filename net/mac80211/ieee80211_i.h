@@ -906,6 +906,10 @@ struct ieee80211_sub_if_data {
 	bool rc_has_mcs_mask[IEEE80211_NUM_BANDS];
 	u8  rc_rateidx_mcs_mask[IEEE80211_NUM_BANDS][IEEE80211_HT_MCS_MASK_LEN];
 
+	/* Store bitrate mask configured from user-space */
+	struct cfg80211_bitrate_mask cfg_bitrate_mask;
+	bool cfg_bitrate_mask_set; /* Has user set the mask? */
+
 	union {
 		struct ieee80211_if_ap ap;
 		struct ieee80211_if_wds wds;
@@ -1604,6 +1608,14 @@ int ieee80211_mesh_csa_beacon(struct ieee80211_sub_if_data *sdata,
 int ieee80211_mesh_finish_csa(struct ieee80211_sub_if_data *sdata);
 
 /* scan/BSS handling */
+void ieee80211_check_disabled_rates(struct ieee80211_sub_if_data *sdata,
+				    bool *disable_ht,
+				    bool *disable_vht);
+void ieee80211_check_all_rates_disabled(u8 bands_used,
+					bool *disable_ht_cfg,
+					bool *disable_vht_cfg,
+					bool *disable_ht,
+					bool *disable_vht);
 void ieee80211_scan_work(struct work_struct *work);
 int ieee80211_request_ibss_scan(struct ieee80211_sub_if_data *sdata,
 				const u8 *ssid, u8 ssid_len,
@@ -1981,7 +1993,8 @@ int ieee80211_build_preq_ies(struct ieee80211_local *local, u8 *buffer,
 			     struct ieee80211_scan_ies *ie_desc,
 			     const u8 *ie, size_t ie_len,
 			     u8 bands_used, u32 *rate_masks,
-			     struct cfg80211_chan_def *chandef);
+			     struct cfg80211_chan_def *chandef,
+			     bool disable_ht, bool disable_vht);
 struct sk_buff *ieee80211_build_probe_req(struct ieee80211_sub_if_data *sdata,
 					  const u8 *src, const u8 *dst,
 					  u32 ratemask,

@@ -256,6 +256,8 @@ static bool ieee80211_prep_hw_scan(struct ieee80211_local *local)
 	struct cfg80211_chan_def chandef;
 	u8 bands_used = 0;
 	int i, ielen, n_chans;
+	bool disable_ht;
+	bool disable_vht;
 
 	req = rcu_dereference_protected(local->scan_req,
 					lockdep_is_held(&local->mtx));
@@ -291,6 +293,11 @@ static bool ieee80211_prep_hw_scan(struct ieee80211_local *local)
 		} while (!n_chans);
 	}
 
+	ieee80211_check_all_rates_disabled(bands_used,
+					   local->hw_scan_req->disable_ht,
+					   local->hw_scan_req->disable_vht,
+					   &disable_ht, &disable_vht);
+
 	local->hw_scan_req->req.n_channels = n_chans;
 	ieee80211_prepare_scan_chandef(&chandef, req->scan_width);
 
@@ -299,7 +306,8 @@ static bool ieee80211_prep_hw_scan(struct ieee80211_local *local)
 					 local->hw_scan_ies_bufsize,
 					 &local->hw_scan_req->ies,
 					 req->ie, req->ie_len,
-					 bands_used, req->rates, &chandef);
+					 bands_used, req->rates, &chandef,
+					 disable_ht, disable_vht);
 	local->hw_scan_req->req.ie_len = ielen;
 	local->hw_scan_req->req.no_cck = req->no_cck;
 	ether_addr_copy(local->hw_scan_req->req.mac_addr, req->mac_addr);
@@ -556,6 +564,10 @@ static int __ieee80211_start_scan(struct ieee80211_sub_if_data *sdata,
 		local->hw_scan_req->req.flags = req->flags;
 
 		local->hw_scan_band = 0;
+
+		ieee80211_check_disabled_rates(sdata,
+					       local->hw_scan_req->disable_ht,
+					       local->hw_scan_req->disable_vht);
 
 		/*
 		 * After allocating local->hw_scan_req, we must
@@ -1066,6 +1078,10 @@ int __ieee80211_request_sched_scan_start(struct ieee80211_sub_if_data *sdata,
 	struct cfg80211_chan_def chandef;
 	int ret, i, iebufsz, num_bands = 0;
 	u32 rate_masks[IEEE80211_NUM_BANDS] = {};
+	bool disable_ht_cfg[IEEE80211_NUM_BANDS];
+	bool disable_vht_cfg[IEEE80211_NUM_BANDS];
+	bool disable_ht;
+	bool disable_vht;
 	u8 bands_used = 0;
 	u8 *ie;
 	size_t len;
@@ -1093,10 +1109,16 @@ int __ieee80211_request_sched_scan_start(struct ieee80211_sub_if_data *sdata,
 
 	ieee80211_prepare_scan_chandef(&chandef, req->scan_width);
 
+	ieee80211_check_disabled_rates(sdata, disable_ht_cfg, disable_vht_cfg);
+	ieee80211_check_all_rates_disabled(bands_used, disable_ht_cfg,
+					   disable_vht_cfg,
+					   &disable_ht, &disable_vht);
+
 	len = ieee80211_build_preq_ies(local, ie, num_bands * iebufsz,
 				       &sched_scan_ies, req->ie,
 				       req->ie_len, bands_used,
-				       rate_masks, &chandef);
+				       rate_masks, &chandef, disable_ht,
+				       disable_vht);
 
 	ret = drv_sched_scan_start(local, sdata, req, &sched_scan_ies);
 	if (ret == 0) {
