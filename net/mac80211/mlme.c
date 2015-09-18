@@ -635,6 +635,8 @@ static void ieee80211_send_assoc(struct ieee80211_sub_if_data *sdata)
 						     assoc_data->supp_rates_len,
 						     &rates);
 	} else {
+		u32 msk = sdata->cfg_bitrate_mask.control[chan->band].legacy;
+
 		/*
 		 * In case AP not provide any supported rates information
 		 * before association, we send information element(s) with
@@ -644,6 +646,9 @@ static void ieee80211_send_assoc(struct ieee80211_sub_if_data *sdata)
 		for (i = 0; i < sband->n_bitrates; i++) {
 			if ((rate_flags & sband->bitrates[i].flags)
 			    != rate_flags)
+				continue;
+			if (sdata->cfg_bitrate_mask_set &&
+			    (!(msk & (1 << i))))
 				continue;
 			rates |= BIT(i);
 			rates_len++;
@@ -4735,8 +4740,35 @@ int ieee80211_mgd_assoc(struct ieee80211_sub_if_data *sdata,
 		sdata->smps_mode = ifmgd->req_smps;
 
 	assoc_data->capability = req->bss->capability;
-	assoc_data->supp_rates = bss->supp_rates;
-	assoc_data->supp_rates_len = bss->supp_rates_len;
+	if (sdata->cfg_bitrate_mask_set) {
+		int band = req->bss->channel->band;
+		u32 msk = sdata->cfg_bitrate_mask.control[band].legacy;
+		u8 all_rates[12] = {0x82, 0x84, 0x8b, 0x96,
+				    12, 18, 24, 36, 48, 72, 96, 108};
+		int i;
+		int q = 0;
+
+		for (i = 0; i < 12; i++) {
+			int j;
+
+			if (!(msk & (1 << i)))
+				break;
+
+			for (j = 0; j < bss->supp_rates_len; j++) {
+				if (bss->supp_rates[j] == all_rates[i]) {
+					assoc_data->supp_rates[q] =
+						all_rates[i];
+					q++;
+					break;
+				}
+			}
+		}
+		assoc_data->supp_rates_len = q;
+	} else {
+		memcpy(assoc_data->supp_rates, bss->supp_rates,
+		       bss->supp_rates_len);
+		assoc_data->supp_rates_len = bss->supp_rates_len;
+	}
 
 	rcu_read_lock();
 	ht_ie = ieee80211_bss_get_ie(req->bss, WLAN_EID_HT_OPERATION);
