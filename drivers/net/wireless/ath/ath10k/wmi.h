@@ -2234,6 +2234,12 @@ struct wmi_start_scan_arg {
  * Allow the driver to have influence over that. */
 #define WMI_SCAN_CONTINUE_ON_ERROR 0x80
 
+/* CT Firmware only, v15 and higher */
+/* Don't advertise any HT support in scan req */
+#define WMI_SCAN_DISABLE_HT  0x40000000
+/* Don't advertise any VHT support in scan req */
+#define WMI_SCAN_DISABLE_VHT 0x80000000
+
 /* WMI_SCAN_CLASS_MASK must be the same value as IEEE80211_SCAN_CLASS_MASK */
 #define WMI_SCAN_CLASS_MASK 0xFF000000
 
