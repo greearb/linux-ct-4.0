@@ -4743,11 +4743,23 @@ int ieee80211_mgd_assoc(struct ieee80211_sub_if_data *sdata,
 	if (sdata->cfg_bitrate_mask_set) {
 		int band = req->bss->channel->band;
 		u32 msk = sdata->cfg_bitrate_mask.control[band].legacy;
-		u8 all_rates[12] = {0x82, 0x84, 0x8b, 0x96,
-				    12, 18, 24, 36, 48, 72, 96, 108};
+		u8 all_rates[12] = { 2, 4, 11, 22,
+				     12, 18, 24, 36, 48, 72, 96, 108 };
 		int i;
 		int q = 0;
 
+		/* Skip CCK rates for 5Ghz band */
+		if (band == IEEE80211_BAND_5GHZ)
+			msk = msk << 4;
+
+#if 0
+		pr_err("mgt-assoc, band: %d msk: 0x%x  bss-rates-len: %d\n",
+		       band, msk, (int)(bss->supp_rates_len));
+		for (i = 0; i < bss->supp_rates_len; i++) {
+			pr_err("bss rate[%d] = %d (0x%x)\n",
+			       i, bss->supp_rates[i], bss->supp_rates[i]);
+		}
+#endif
 		for (i = 0; i < 12; i++) {
 			int j;
 
@@ -4755,9 +4767,10 @@ int ieee80211_mgd_assoc(struct ieee80211_sub_if_data *sdata,
 				break;
 
 			for (j = 0; j < bss->supp_rates_len; j++) {
-				if (bss->supp_rates[j] == all_rates[i]) {
+				/* Mask out the 'basic-rate' flag, 0x80 */
+				if ((bss->supp_rates[j] & 0x7f) == all_rates[i]) {
 					assoc_data->supp_rates[q] =
-						all_rates[i];
+						bss->supp_rates[j];
 					q++;
 					break;
 				}
