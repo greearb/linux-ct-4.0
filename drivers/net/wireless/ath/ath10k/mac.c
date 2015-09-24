@@ -1662,7 +1662,7 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 	const struct ieee80211_supported_band *sband;
 	const struct ieee80211_rate *rates;
 	u32 ratemask;
-	int i, j;
+	int i;
 	int band = ar->hw->conf.chandef.chan->band;
 
 	if (! test_bit(ATH10K_FW_FEATURE_CT_RATEMASK, ar->fw_features))
@@ -1696,8 +1696,8 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 			// ofdm rates start at rix 4
 			hw_rix += 4;
 		}
-		ath10k_warn(ar, "set-enabled, bitrate: %d  j: %d  hw-value: %d rix: %d\n",
-			    rates->bitrate, j, rates->hw_value, hw_rix);
+		ath10k_warn(ar, "set-enabled, bitrate: %d  i: %d  hw-value: %d rix: %d\n",
+			    rates->bitrate, i, rates->hw_value, hw_rix);
 		ath10k_set_rate_enabled(hw_rix, arg->rate_overrides, 1);
 	}
 
@@ -2460,27 +2460,27 @@ found_preferred24:
 		   ratemask, mcast_rt, bcast_rt, mgt_rt, band);
 
 	if (mcast_rt != WMI_FIXED_RATE_NONE) {
-		ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
-					  ar->wmi.vdev_param->mcast_data_rate,
-					  mcast_rt);
+		ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
+						ar->wmi.vdev_param->mcast_data_rate,
+						mcast_rt);
 		if (ret)
 			ath10k_warn(ar, "failed to set mcast rate param 0x%02x: %d\n",
 				    mcast_rt, ret);
 	}
 
 	if (bcast_rt != WMI_FIXED_RATE_NONE) {
-		ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
-					  ar->wmi.vdev_param->bcast_data_rate,
-					  bcast_rt);
+		ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
+						ar->wmi.vdev_param->bcast_data_rate,
+						bcast_rt);
 		if (ret)
 			ath10k_warn(ar, "failed to set bcast rate param 0x%02x: %d\n",
 				    bcast_rt, ret);
 	}
 
 	if (mgt_rt != WMI_FIXED_RATE_NONE) {
-		ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
-					  ar->wmi.vdev_param->mgmt_rate,
-					  mgt_rt);
+		ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
+						ar->wmi.vdev_param->mgmt_rate,
+						mgt_rt);
 		if (ret)
 			ath10k_warn(ar, "failed to set mgt rate param 0x%02x: %d\n",
 				    mgt_rt, ret);
