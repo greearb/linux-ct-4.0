@@ -4979,6 +4979,13 @@ struct wmi_pdev_set_special_cmd {
 					   * spec when the eeprom values are dodgy.
                                            * See debug.c, ath10k_read_ct_special for details.
                                            */
+#define SET_SPECIAL_ID_IBSS_AMSDU_OK    5 /* As far as I can tell, AR988X hardware is incapable of properly doing
+					   * IBSS  AMSDU frames.  It zeros out the BSSID, which causes the receiving
+					   * stack (Linux, at least) to drop the frame because of bssid-mismatch.
+					   * But, maybe someone has a received that can handle this one way or another
+					   * and wants the additional speed given by AMSDU.  So, use this setting to
+					   * allow AMSDU with IBSS:  val of 1 enables, val of 0 disables.
+					   */
 #define CT_CCA_TYPE_MIN0 0
 #define CT_CCA_TYPE_MIN1 1
 #define CT_CCA_TYPE_MIN2 2
