@@ -3264,7 +3264,14 @@ static bool prepare_for_handlers(struct ieee80211_rx_data *rx,
 			return false;
 		if (ieee80211_is_beacon(hdr->frame_control)) {
 			return true;
-		} else if (!ieee80211_bssid_match(bssid, sdata->u.ibss.bssid)) {
+		} else if ((!ieee80211_bssid_match(bssid, sdata->u.ibss.bssid)) &&
+			 (! is_zero_ether_addr(bssid))) {
+			/** ath10k seems to zero the BSSID when using AMSDU sub-frames
+			 * As far as I can tell, this is a hardware issue and I see no way to resolve
+			 * it in firmware.
+			 * Allow these packets as work-around.
+			 * I am not sure whether this could cause problems in some setups or not.
+			 */
 			return false;
 		} else if (!multicast &&
 			   !ether_addr_equal(sdata->vif.addr, hdr->addr1)) {
