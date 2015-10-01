@@ -2224,10 +2224,10 @@ static void ath10k_fetch_rc_txctl(struct ath10k *ar, struct ath10k_vif *arvif,
 		 * it must be DMA'd to firmware RAM.  CT Firmware offers this API to cause
 		 * firmware to request it.  It is a race either way, but this should make
 		 * it work more often.  Last argument is ignored by firmware.
+		 * Firmware will properly deal with failures to find rate-ctrl cache.
 		 */
 		ath10k_wmi_peer_set_param(ar, arvif->vdev_id, addr,
 					  WMI_PEER_FETCH_RC, 0);
-		msleep(1);
 	}
 }
 
