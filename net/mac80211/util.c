@@ -92,20 +92,20 @@ void ieee80211_check_disabled_rates(struct ieee80211_sub_if_data *sdata,
 	for (i = 0; i < IEEE80211_NUM_BANDS; i++) {
 		disable_ht[i] = false;
 		disable_vht[i] = false;
-		if (!sdata->cfg_bitrate_mask_set)
-			break;
+		if (!sdata->cfg_advert_bitrate_mask_set)
+			continue;
 
 		disable_ht[i] = true;
 		disable_vht[i] = true;
 		for (j = 0; j < IEEE80211_HT_MCS_MASK_LEN; j++) {
-			if (sdata->cfg_bitrate_mask.control[i].ht_mcs[j]) {
+			if (sdata->cfg_advert_bitrate_mask.control[i].ht_mcs[j]) {
 				disable_ht[i] = false;
 				break;
 			}
 		}
 
 		for (j = 0; j < NL80211_VHT_NSS_MAX; j++) {
-			if (sdata->cfg_bitrate_mask.control[i].vht_mcs[j]) {
+			if (sdata->cfg_advert_bitrate_mask.control[i].vht_mcs[j]) {
 				disable_vht[i] = false;
 				break;
 			}

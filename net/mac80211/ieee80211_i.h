@@ -906,9 +906,12 @@ struct ieee80211_sub_if_data {
 	bool rc_has_mcs_mask[IEEE80211_NUM_BANDS];
 	u8  rc_rateidx_mcs_mask[IEEE80211_NUM_BANDS][IEEE80211_HT_MCS_MASK_LEN];
 
-	/* Store bitrate mask configured from user-space */
-	struct cfg80211_bitrate_mask cfg_bitrate_mask;
-	bool cfg_bitrate_mask_set; /* Has user set the mask? */
+	/* Store bitrate mask configured from user-space.  This is for
+	 * rates that should be advertised in probe requests, etc.  This
+	 * is NOT directly related to the tx-rate-ctrl logic configuration.
+	 */
+	struct cfg80211_bitrate_mask cfg_advert_bitrate_mask;
+	bool cfg_advert_bitrate_mask_set; /* Has user set the mask? */
 
 	union {
 		struct ieee80211_if_ap ap;

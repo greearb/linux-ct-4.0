@@ -635,7 +635,7 @@ static void ieee80211_send_assoc(struct ieee80211_sub_if_data *sdata)
 						     assoc_data->supp_rates_len,
 						     &rates);
 	} else {
-		u32 msk = sdata->cfg_bitrate_mask.control[chan->band].legacy;
+		u32 msk = sdata->cfg_advert_bitrate_mask.control[chan->band].legacy;
 
 		/*
 		 * In case AP not provide any supported rates information
@@ -647,7 +647,7 @@ static void ieee80211_send_assoc(struct ieee80211_sub_if_data *sdata)
 			if ((rate_flags & sband->bitrates[i].flags)
 			    != rate_flags)
 				continue;
-			if (sdata->cfg_bitrate_mask_set &&
+			if (sdata->cfg_advert_bitrate_mask_set &&
 			    (!(msk & (1 << i))))
 				continue;
 			rates |= BIT(i);
@@ -4740,9 +4740,9 @@ int ieee80211_mgd_assoc(struct ieee80211_sub_if_data *sdata,
 		sdata->smps_mode = ifmgd->req_smps;
 
 	assoc_data->capability = req->bss->capability;
-	if (sdata->cfg_bitrate_mask_set) {
+	if (sdata->cfg_advert_bitrate_mask_set) {
 		int band = req->bss->channel->band;
-		u32 msk = sdata->cfg_bitrate_mask.control[band].legacy;
+		u32 msk = sdata->cfg_advert_bitrate_mask.control[band].legacy;
 		u8 all_rates[12] = { 2, 4, 11, 22,
 				     12, 18, 24, 36, 48, 72, 96, 108 };
 		int i;
