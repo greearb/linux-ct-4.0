@@ -4986,6 +4986,9 @@ struct wmi_pdev_set_special_cmd {
 					   * and wants the additional speed given by AMSDU.  So, use this setting to
 					   * allow AMSDU with IBSS:  val of 1 enables, val of 0 disables.
 					   */
+#define SET_SPECIAL_ID_MAX_TXPOWER      6 /* Set the maximum allowed tx-power.  This over-rules any other
+                                           * power settings.
+                                           */
 #define CT_CCA_TYPE_MIN0 0
 #define CT_CCA_TYPE_MIN1 1
 #define CT_CCA_TYPE_MIN2 2
