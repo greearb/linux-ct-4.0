@@ -42,8 +42,10 @@ static int validate_nla(const struct nlattr *nla, int maxtype,
 
 	switch (pt->type) {
 	case NLA_FLAG:
-		if (attrlen > 0)
+		if (attrlen > 0) {
+			pr_err("validate-nla:  FLAG len is too large: %d\n", attrlen);
 			return -ERANGE;
+		}
 		break;
 
 	case NLA_NUL_STRING:
@@ -52,13 +54,17 @@ static int validate_nla(const struct nlattr *nla, int maxtype,
 		else
 			minlen = attrlen;
 
-		if (!minlen || memchr(nla_data(nla), '\0', minlen) == NULL)
+		if (!minlen || memchr(nla_data(nla), '\0', minlen) == NULL) {
+			pr_err("validate-nla:  NUL-STRING parse error, minlen: %d\n", minlen);
 			return -EINVAL;
+		}
 		/* fall through */
 
 	case NLA_STRING:
-		if (attrlen < 1)
+		if (attrlen < 1) {
+			pr_err("validate-nla:  STRING too short, attrlen: %d\n", attrlen);
 			return -ERANGE;
+		}
 
 		if (pt->len) {
 			char *buf = nla_data(nla);
@@ -66,26 +72,41 @@ static int validate_nla(const struct nlattr *nla, int maxtype,
 			if (buf[attrlen - 1] == '\0')
 				attrlen--;
 
-			if (attrlen > pt->len)
+			if (attrlen > pt->len) {
+				pr_err("validate-nla:  STRING length err, attrlen: %d pt->len: %d\n",
+				       attrlen, pt->len);
 				return -ERANGE;
+			}
 		}
 		break;
 
 	case NLA_BINARY:
-		if (pt->len && attrlen > pt->len)
+		if (pt->len && attrlen > pt->len) {
+			pr_err("validate-nla:  BINARY length err, attrlen: %d pt->len: %d\n",
+			       attrlen, pt->len);
 			return -ERANGE;
+		}
 		break;
 
 	case NLA_NESTED_COMPAT:
-		if (attrlen < pt->len)
+		if (attrlen < pt->len) {
+			pr_err("validate-nla:  NESTED-COMPAT length err, attrlen: %d pt->len: %d\n",
+			       attrlen, pt->len);
 			return -ERANGE;
+		}
 		if (attrlen < NLA_ALIGN(pt->len))
 			break;
-		if (attrlen < NLA_ALIGN(pt->len) + NLA_HDRLEN)
+		if (attrlen < NLA_ALIGN(pt->len) + NLA_HDRLEN) {
+			pr_err("validate-nla:  NESTED-COMPAT align err, attrlen: %d ALIGN: %d HDRLEN: %d\n",
+			       attrlen, NLA_ALIGN(pt->len), NLA_HDRLEN);
 			return -ERANGE;
+		}
 		nla = nla_data(nla) + NLA_ALIGN(pt->len);
-		if (attrlen < NLA_ALIGN(pt->len) + NLA_HDRLEN + nla_len(nla))
+		if (attrlen < NLA_ALIGN(pt->len) + NLA_HDRLEN + nla_len(nla)) {
+			pr_err("validate-nla:  NESTED-COMPAT data len err, attrlen: %d ALIGN: %d HDRLEN: %d nla_len: %d\n",
+			       attrlen, NLA_ALIGN(pt->len), NLA_HDRLEN, nla_len(nla));
 			return -ERANGE;
+		}
 		break;
 	case NLA_NESTED:
 		/* a nested attributes is allowed to be empty; if its not,
@@ -99,8 +120,11 @@ static int validate_nla(const struct nlattr *nla, int maxtype,
 		else if (pt->type != NLA_UNSPEC)
 			minlen = nla_attr_minlen[pt->type];
 
-		if (attrlen < minlen)
+		if (attrlen < minlen) {
+			pr_err("validate-nla:  DEFAULT (%d) lenght error, attrlen: %d  minlen: %d\n",
+			       pt->type, attrlen, minlen);
 			return -ERANGE;
+		}
 	}
 
 	return 0;
@@ -193,8 +217,10 @@ int nla_parse(struct nlattr **tb, int maxtype, const struct nlattr *head,
 		if (type > 0 && type <= maxtype) {
 			if (policy) {
 				err = validate_nla(nla, maxtype, policy);
-				if (err < 0)
+				if (err < 0) {
+					pr_err("nla-parse:  Error parsing object type: %d err: %d\n", type, err);
 					goto errout;
+				}
 			}
 
 			tb[type] = (struct nlattr *)nla;

@@ -8159,14 +8159,20 @@ static bool ht_rateset_to_mask(struct ieee80211_supported_band *sband,
 		rbit = BIT(rates[i] % 8);
 
 		/* check validity */
-		if ((ridx < 0) || (ridx >= IEEE80211_HT_MCS_MASK_LEN))
+		if ((ridx < 0) || (ridx >= IEEE80211_HT_MCS_MASK_LEN)) {
+			pr_err("ht-rateset, i: %d ridx out of range: %d  max: %d\n",
+			       i, ridx, IEEE80211_HT_MCS_MASK_LEN);
 			return false;
+		}
 
 		/* check availability */
 		if (sband->ht_cap.mcs.rx_mask[ridx] & rbit)
 			mcs[ridx] |= rbit;
-		else
+		else {
+			pr_err("ht-rateset, not available, i: %d ridx: %d rbit: %d  mask: %d\n",
+			       i, ridx, rbit, sband->ht_cap.mcs.rx_mask[ridx]);
 			return false;
+		}
 	}
 
 	return true;
@@ -8304,7 +8310,8 @@ static int nl80211_set_tx_bitrate_mask(struct sk_buff *skb,
 		err = nla_parse(tb, NL80211_TXRATE_MAX, nla_data(tx_rates),
 				nla_len(tx_rates), nl80211_txattr_policy);
 		if (err) {
-			pr_err("Error parsing tx_rates, band: %d\n", band);
+			pr_err("Error parsing tx_rates, band: %d, len: %d err: %d\n",
+			       band, nla_len(tx_rates), err);
 			return err;
 		}
 		if (tb[NL80211_TXRATE_LEGACY]) {
