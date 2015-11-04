@@ -1761,6 +1761,16 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 #endif
 }
 
+static u32 get_nss_from_chainmask(u16 chain_mask)
+{
+	if ((chain_mask & 0xf) == 0xf)
+		return 4;
+	else if ((chain_mask & 0x7) == 0x7)
+		return 3;
+	else if ((chain_mask & 0x3) == 0x3)
+		return 2;
+	return 1;
+}
 
 static void ath10k_peer_assoc_h_ht(struct ath10k *ar,
 				   struct ieee80211_vif *vif,
@@ -1855,6 +1865,7 @@ static void ath10k_peer_assoc_h_ht(struct ath10k *ar,
 		if (vht_mcs_mask[i])
 			max_nss = i + 1;
 	}
+	max_nss = min(max_nss, get_nss_from_chainmask(ar->cfg_tx_chainmask));
 
 	/*
 	 * This is a workaround for HT-enabled STAs which break the spec
@@ -3850,17 +3861,6 @@ static int ath10k_config(struct ieee80211_hw *hw, u32 changed)
 
 	mutex_unlock(&ar->conf_mutex);
 	return ret;
-}
-
-static u32 get_nss_from_chainmask(u16 chain_mask)
-{
-	if ((chain_mask & 0x15) == 0x15)
-		return 4;
-	else if ((chain_mask & 0x7) == 0x7)
-		return 3;
-	else if ((chain_mask & 0x3) == 0x3)
-		return 2;
-	return 1;
 }
 
 /*
