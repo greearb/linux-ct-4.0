@@ -1782,7 +1782,8 @@ static void ath10k_peer_assoc_h_ht(struct ath10k *ar,
 	enum ieee80211_band band;
 	const u8 *ht_mcs_mask;
 	const u16 *vht_mcs_mask;
-	int i, n, max_nss;
+	int i, n;
+	u32 max_nss;
 	u32 stbc;
 
 	lockdep_assert_held(&ar->conf_mutex);
