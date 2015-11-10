@@ -34,6 +34,10 @@ module_param_named(override_eeprom_regdomain,
 		   modparam_override_eeprom_regdomain, int, 0444);
 MODULE_PARM_DESC(override_eeprom_regdomain, "Override regdomain hardcoded in EEPROM with this value (DANGEROUS).");
 
+unsigned int ath10k_max_nss = 255;
+module_param_named(max_nss, ath10k_max_nss, uint, 0644);
+MODULE_PARM_DESC(max_nss, "System-wide cap on NSS for ath10k");
+
 
 /* MAIN WMI cmd track */
 static struct wmi_cmd_map wmi_cmd_map = {
@@ -3073,7 +3077,7 @@ ath10k_wmi_main_op_pull_svc_rdy_ev(struct ath10k *ar, struct sk_buff *skb,
 	arg->sw_ver0 = ev->sw_version;
 	arg->sw_ver1 = ev->sw_version_1;
 	arg->phy_capab = ev->phy_capability;
-	arg->num_rf_chains = ev->num_rf_chains;
+	arg->num_rf_chains = min(ath10k_max_nss, ev->num_rf_chains);
 	arg->eeprom_rd = ev->hal_reg_capabilities.eeprom_rd;
 	arg->num_mem_reqs = ev->num_mem_reqs;
 	arg->service_map = ev->wmi_service_bitmap;
@@ -3109,7 +3113,7 @@ ath10k_wmi_10x_op_pull_svc_rdy_ev(struct ath10k *ar, struct sk_buff *skb,
 	arg->vht_cap = ev->vht_cap_info;
 	arg->sw_ver0 = ev->sw_version;
 	arg->phy_capab = ev->phy_capability;
-	arg->num_rf_chains = ev->num_rf_chains;
+	arg->num_rf_chains = min(ath10k_max_nss, ev->num_rf_chains);
 	arg->eeprom_rd = ev->hal_reg_capabilities.eeprom_rd;
 	arg->num_mem_reqs = ev->num_mem_reqs;
 	arg->service_map = ev->wmi_service_bitmap;
@@ -3154,7 +3158,7 @@ void ath10k_wmi_event_service_ready(struct ath10k *ar, struct sk_buff *skb)
 		(__le32_to_cpu(arg.sw_ver1) & 0xffff0000) >> 16;
 	ar->fw_version_build = (__le32_to_cpu(arg.sw_ver1) & 0x0000ffff);
 	ar->phy_capability = __le32_to_cpu(arg.phy_capab);
-	ar->num_rf_chains = __le32_to_cpu(arg.num_rf_chains);
+	ar->num_rf_chains = min(ath10k_max_nss, __le32_to_cpu(arg.num_rf_chains));
 	ar->ath_common.regulatory.current_rd = __le32_to_cpu(arg.eeprom_rd);
 
 	ath10k_dbg_dump(ar, ATH10K_DBG_WMI, NULL, "wmi svc: ",
