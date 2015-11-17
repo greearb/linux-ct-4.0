@@ -157,6 +157,7 @@
 #include <net/checksum.h>
 #include <net/ipv6.h>
 #include <net/udp.h>
+#include <net/tcp.h>
 #include <net/ip6_checksum.h>
 #include <net/addrconf.h>
 #ifdef CONFIG_XFRM
@@ -714,8 +715,8 @@ static int pktgen_if_show(struct seq_file *seq, void *v)
 	if (pkt_dev->flags & F_USE_REL_TS)
 		seq_puts(seq,  "USE_REL_TS  ");
 
-	if (pkt_dev->flags & F_CSUM)
-		seq_puts(seq,  "CSUM  ");
+	if (pkt_dev->flags & F_TCP)
+		seq_puts(seq,  "TCP  ");
 
 	if (pkt_dev->cflows) {
 		if (pkt_dev->flags & F_FLOW_SEQ)
@@ -1343,10 +1344,12 @@ static ssize_t pktgen_if_write(struct file *file,
 		else if (strcmp(f, "UDPDST_RND") == 0)
 			pkt_dev->flags |= F_UDPDST_RND;
 
-		else if (strcmp(f, "UDPCSUM") == 0)
+		else if ((strcmp(f, "UDPCSUM") == 0) ||
+			 (strcmp(f, "CSUM") == 0))
 			pkt_dev->flags |= F_UDPCSUM;
 
-		else if (strcmp(f, "!UDPCSUM") == 0)
+		else if ((strcmp(f, "!UDPCSUM") == 0) ||
+			 (strcmp(f, "!CSUM") == 0))
 			pkt_dev->flags &= ~F_UDPCSUM;
 
 		else if (strcmp(f, "NO_TIMESTAMP") == 0)
@@ -1409,12 +1412,6 @@ static ssize_t pktgen_if_write(struct file *file,
 		else if (strcmp(f, "!PEER_LOCAL") == 0)
 			pkt_dev->flags &= ~F_PEER_LOCAL;
 
-		else if (strcmp(f, "CSUM") == 0)
-			pkt_dev->flags |= F_CSUM;
-
-		else if (strcmp(f, "!CSUM") == 0)
-			pkt_dev->flags &= ~F_CSUM;
-
 		else if (strcmp(f, "USE_REL_TS") == 0) {
 			if (pkt_dev->running && !(pkt_dev->flags & F_USE_REL_TS)) {
 				if (!use_rel_ts++)
@@ -1441,6 +1438,12 @@ static ssize_t pktgen_if_write(struct file *file,
 
 		else if (strcmp(f, "!NODE_ALLOC") == 0)
 			pkt_dev->flags &= ~F_NODE;
+
+		else if (strcmp(f, "TCP") == 0)
+			pkt_dev->flags |= F_TCP;
+
+		else if (strcmp(f, "!TCP") == 0)
+			pkt_dev->flags &= ~F_TCP;
 
 		else {
 			printk("pktgen: Flag -:%s:- unknown\n", f);
@@ -2147,8 +2150,8 @@ static void pktgen_mark_device(const struct pktgen_net *pn, const char *ifname)
 			break;	/* success */
 
 		mutex_unlock(&pktgen_thread_lock);
-		pr_debug("pktgen: pktgen_mark_device waiting for %s "
-				"to disappear....\n", ifname);
+		pr_debug("pktgen: pktgen_mark_device waiting for %s to disappear....\n",
+			 ifname);
 		schedule_timeout_interruptible(msecs_to_jiffies(msec_per_try));
 		mutex_lock(&pktgen_thread_lock);
 
@@ -2158,7 +2161,6 @@ static void pktgen_mark_device(const struct pktgen_net *pn, const char *ifname)
 			       msec_per_try * i, ifname);
 			break;
 		}
-
 	}
 
 	mutex_unlock(&pktgen_thread_lock);
@@ -3184,26 +3186,48 @@ static struct sk_buff *pktgen_alloc_skb(struct net_device *dev,
 	return skb;
 }
 
-static void pg_do_csum(struct sk_buff *skb) {
+static void pg_do_csum(struct pktgen_dev *pkt_dev, struct sk_buff *skb) {
 	struct iphdr *iph = ip_hdr(skb);
-	struct udphdr *uh = udp_hdr(skb);
+	struct udphdr *uh;
+	struct net_device *odev = pkt_dev->odev;
 
-	uh->check = 0;
+	if (pkt_dev->flags & F_TCP) {
+		struct tcphdr *th = tcp_hdr(skb);
+		unsigned int prefix_len = (unsigned int)((unsigned char*)th - skb->data);
 
-	if (skb->dev->features & NETIF_F_HW_CSUM) {
-		skb->ip_summed = CHECKSUM_PARTIAL;
-		skb->csum_start = skb_transport_header(skb) - skb->head;
-		skb->csum_offset = offsetof(struct udphdr, check);
-		uh->check = ~csum_tcpudp_magic(iph->saddr, iph->daddr, ntohs(uh->len), IPPROTO_UDP, 0);
-	}
-	else {
-		unsigned int offset = skb_transport_offset(skb);
-		skb->csum = skb_checksum(skb, offset, skb->len - offset, 0);
-		skb->ip_summed = CHECKSUM_NONE;
-		uh->check = csum_tcpudp_magic(iph->saddr, iph->daddr, ntohs(uh->len),
-					      IPPROTO_UDP, skb->csum);
-		if (uh->check == 0)
-			uh->check = CSUM_MANGLED_0;
+		if (odev->features & NETIF_F_V4_CSUM) {
+			skb->ip_summed = CHECKSUM_PARTIAL;
+			/* Subtract out IP hdr and before */
+			th->check = ~tcp_v4_check(skb->len - prefix_len, iph->saddr, iph->daddr, 0);
+			skb->csum_start = skb_transport_header(skb) - skb->head;
+			skb->csum_offset = offsetof(struct tcphdr, check);
+		} else {
+			skb->ip_summed = CHECKSUM_NONE;
+			th->check = 0;
+			skb->csum = 0;
+			th->check = tcp_v4_check(skb->len - prefix_len, iph->saddr, iph->daddr,
+						 csum_partial(th, th->doff << 2, skb->csum));
+		}
+		//pr_err("check: 0x%x  csum-start: %d  offset: %d summed: 0x%x  saddr: 0x%x  daddr: 0x%x len: %d headroom: %d tcphdr-offset: %d prefix-len: %d\n",
+		//       th->check, skb->csum_start, skb->csum_offset, skb->ip_summed, iph->saddr, iph->daddr,
+		//       skb->len, skb_headroom(skb), (unsigned int)((unsigned char*)th - skb->data), prefix_len);
+	} else {
+		if (odev->features & NETIF_F_V4_CSUM) {
+			skb->ip_summed = CHECKSUM_PARTIAL;
+			skb->csum = 0;
+			udp4_hwcsum(skb, iph->saddr, iph->daddr);
+		} else {
+			unsigned int offset = skb_transport_offset(skb);
+			__wsum csum = skb_checksum(skb, offset, skb->len - offset, 0);
+			uh = udp_hdr(skb);
+
+			/* add protocol-dependent pseudo-header */
+			uh->check = csum_tcpudp_magic(iph->saddr, iph->daddr,
+						      skb->len - offset, IPPROTO_UDP, csum);
+
+			if (uh->check == 0)
+				uh->check = CSUM_MANGLED_0;
+		}
 	}
 }
 
@@ -3212,7 +3236,8 @@ static struct sk_buff *fill_packet_ipv4(struct net_device *odev,
 {
 	struct sk_buff *skb = NULL;
 	__u8 *eth;
-	struct udphdr *udph;
+	struct udphdr *udph = NULL;
+	struct tcphdr *tcph;
 	int datalen, iplen;
 	struct iphdr *iph;
 	__be16 protocol = htons(ETH_P_IP);
@@ -3274,34 +3299,50 @@ static struct sk_buff *fill_packet_ipv4(struct net_device *odev,
 	iph = (struct iphdr *) skb_put(skb, sizeof(struct iphdr));
 
 	skb_set_transport_header(skb, skb->len);
-	udph = (struct udphdr *) skb_put(skb, sizeof(struct udphdr));
+
+	if (pkt_dev->flags & F_TCP) {
+		datalen = pkt_dev->cur_pkt_size - ETH_HLEN - 20 -
+			  sizeof(struct tcphdr) - pkt_dev->pkt_overhead;
+		if (datalen < sizeof(struct pktgen_hdr))
+			datalen = sizeof(struct pktgen_hdr);
+		tcph = (struct tcphdr *)skb_put(skb, sizeof(struct tcphdr));
+		memset(tcph, 0, sizeof(*tcph));
+		tcph->source = htons(pkt_dev->cur_udp_src);
+		tcph->dest = htons(pkt_dev->cur_udp_dst);
+		tcph->doff = sizeof(struct tcphdr) >> 2;
+		tcph->seq = htonl(pkt_dev->tcp_seqno);
+		pkt_dev->tcp_seqno += datalen;
+		tcph->window = htons(0x7FFF);
+		iplen = 20 + sizeof(struct tcphdr) + datalen;
+	} else {
+		/* Eth + IPh + UDPh + mpls */
+		datalen = cur_pkt_size - 14 - 20 - 8 -
+			pkt_dev->pkt_overhead;
+		if (datalen < sizeof(struct pktgen_hdr))
+			datalen = sizeof(struct pktgen_hdr);
+		udph = (struct udphdr *)skb_put(skb, sizeof(struct udphdr));
+
+		udph->source = htons(pkt_dev->cur_udp_src);
+		udph->dest = htons(pkt_dev->cur_udp_dst);
+		udph->len = htons(datalen + 8);	/* DATA + udphdr */
+		udph->check = 0;
+		iplen = 20 + 8 + datalen;
+	}
+
 	skb->priority = pkt_dev->skb_priority;
 
 	memcpy(eth, pkt_dev->hh, 12);
 	*(__be16 *) & eth[12] = protocol;
 
-	/* Eth + IPh + UDPh + mpls */
-	datalen = cur_pkt_size - 14 - 20 - 8 -
-		  pkt_dev->pkt_overhead;
-	if (datalen < 0 || datalen < sizeof(struct pktgen_hdr))
-		datalen = sizeof(struct pktgen_hdr);
-
-	udph->source = htons(pkt_dev->cur_udp_src);
-	udph->dest = htons(pkt_dev->cur_udp_dst);
-	udph->len = htons(datalen + 8);	/* DATA + udphdr */
-	udph->check = 0;
-
 	iph->ihl = 5;
 	iph->version = 4;
 	iph->ttl = 32;
 	iph->tos = pkt_dev->tos;
-	iph->protocol = IPPROTO_UDP;	/* UDP */
+	iph->protocol = pkt_dev->flags & F_TCP ? IPPROTO_TCP : IPPROTO_UDP;
 	iph->saddr = pkt_dev->cur_saddr;
 	iph->daddr = pkt_dev->cur_daddr;
-	iph->id = htons(pkt_dev->ip_id);
-	pkt_dev->ip_id++;
+	iph->id = htons(pkt_dev->ip_id++);
 	iph->frag_off = 0;
-	iplen = 20 + 8 + datalen;
 	iph->tot_len = htons(iplen);
 	ip_send_check(iph);
 	skb->protocol = protocol;
@@ -3310,21 +3351,20 @@ static struct sk_buff *fill_packet_ipv4(struct net_device *odev,
 
 	pktgen_finalize_skb(pkt_dev, skb, datalen);
 
-	if (!(pkt_dev->flags & F_UDPCSUM)) {
-		skb->ip_summed = CHECKSUM_NONE;
-	} else if (odev->features & NETIF_F_V4_CSUM) {
-		skb->ip_summed = CHECKSUM_PARTIAL;
-		skb->csum = 0;
-		udp4_hwcsum(skb, iph->saddr, iph->daddr);
+	if ((odev->mtu + ETH_HLEN) < skb->len) {
+		int hdrlen = skb_transport_header(skb) - skb_mac_header(skb);
+
+		if (pkt_dev->flags & F_TCP) {
+			skb_shinfo(skb)->gso_type = SKB_GSO_TCPV4;
+			hdrlen += tcp_hdrlen(skb);
+		} else {
+			skb_shinfo(skb)->gso_type = SKB_GSO_UDP;
+			hdrlen += sizeof(struct udphdr);
+		}
+		skb_shinfo(skb)->gso_size = odev->mtu - hdrlen;
+		skb_shinfo(skb)->gso_segs = DIV_ROUND_UP(skb->len - hdrlen, skb_shinfo(skb)->gso_size);
 	} else {
-		__wsum csum = skb_checksum(skb, skb_transport_offset(skb), datalen + 8, 0);
-
-		/* add protocol-dependent pseudo-header */
-		udph->check = csum_tcpudp_magic(iph->saddr, iph->daddr,
-						datalen + 8, IPPROTO_UDP, csum);
-
-		if (udph->check == 0)
-			udph->check = CSUM_MANGLED_0;
+		skb_shinfo(skb)->gso_type = 0;
 	}
 
 #ifdef CONFIG_XFRM
@@ -3332,8 +3372,10 @@ static struct sk_buff *fill_packet_ipv4(struct net_device *odev,
 		return NULL;
 #endif
 
-	if (pkt_dev->flags & F_CSUM)
-		pg_do_csum(skb);
+	if (pkt_dev->flags & F_UDPCSUM)
+		pg_do_csum(pkt_dev, skb);
+	else
+		skb->ip_summed = CHECKSUM_NONE;
 
 	return skb;
 }
@@ -3540,6 +3582,8 @@ static void record_latency(struct pktgen_dev* pkt_dev, int latency) {
 
 /* Returns < 0 if the skb is not a pktgen buffer. */
 int pktgen_receive(struct sk_buff* skb) {
+	bool is_tcp;
+
         /* See if we have a pktgen packet */
 	/* TODO:  Add support for detecting IPv6, TCP packets too.  This will only
 	 * catch UDP at the moment. --Ben
@@ -3565,6 +3609,19 @@ int pktgen_receive(struct sk_buff* skb) {
 		   skb->data, skb->h.raw); */
 
                 pgh = (struct pktgen_hdr*)(skb->data + 20 + 8);
+
+		if (pgh->pgh_magic != __constant_ntohl(PKTGEN_MAGIC)) {
+			/* Maybe TCP packet? */
+			if (!pskb_may_pull(skb, 20 + sizeof(struct tcphdr) + sizeof(struct pktgen_hdr))) {
+				return -1;
+			}
+
+			pgh = (struct pktgen_hdr*)(skb->data + 20 + sizeof(struct tcphdr));
+			is_tcp = true;
+		}
+		else {
+			is_tcp = false;
+		}
 
                 /*
                 tmp = (char*)(skb->data);
@@ -3603,30 +3660,18 @@ int pktgen_receive(struct sk_buff* skb) {
 			/* account for pre-amble and inter-frame gap, crc */
                         pkt_dev->bytes_rcvd_ll += (skb->len + hdr_len + 24);
 
-			/* Check for bad UDP checksums. */
-			if (pkt_dev->flags & F_CSUM) {
-				/* Copied from udp4_csum_init */
-				const struct iphdr *iph = (struct iphdr *)(skb->data);
-				struct udphdr *uh = (struct udphdr *)(skb->data + 20);
-
-				skb_pull(skb, 20); /* remove IP hdr so csum logic works */
-
-				UDP_SKB_CB(skb)->partial_cov = 0;
-				UDP_SKB_CB(skb)->cscov = skb->len;
-
-				if (uh->check == 0) {
-					skb->ip_summed = CHECKSUM_UNNECESSARY;
-				} else if (skb->ip_summed == CHECKSUM_COMPLETE) {
-					if (!csum_tcpudp_magic(iph->saddr, iph->daddr, skb->len,
-							       IPPROTO_UDP, skb->csum))
-						skb->ip_summed = CHECKSUM_UNNECESSARY;
-				}
-				if (!skb_csum_unnecessary(skb))
-					skb->csum = csum_tcpudp_nofold(iph->saddr, iph->daddr,
-								       skb->len, IPPROTO_UDP, 0);
-				if (udp_lib_checksum_complete(skb)) {
-					pkt_dev->rx_crc_failed++;
-					goto out_free_skb;
+			/* Check for bad checksums. */
+			if (pkt_dev->flags & F_UDPCSUM) {
+				if (is_tcp) {
+					if (tcp_checksum_complete(skb)) {
+						pkt_dev->rx_crc_failed++;
+						goto out_free_skb;
+					}
+				} else {
+					if (udp_lib_checksum_complete(skb)) {
+						pkt_dev->rx_crc_failed++;
+						goto out_free_skb;
+					}
 				}
 			}
 
@@ -4170,6 +4215,15 @@ static void pktgen_xmit(struct pktgen_dev *pkt_dev, u64 now)
 			pkt_dev->allocated_skbs++;
 			if (likely(!forced)) {
 				pkt_dev->clone_count = 0;	/* reset counter */
+
+				if (netif_needs_gso(odev, pkt_dev->skb, netif_skb_features(pkt_dev->skb))) {
+					pr_err("Device doesn't have necessary GSO features! netif_skb_features: %llX summed %u skb-gso: %d gso-ok: %d\n",
+					       netif_skb_features(pkt_dev->skb),
+					       pkt_dev->skb->ip_summed, skb_is_gso(pkt_dev->skb),
+					       skb_gso_ok(pkt_dev->skb, netif_skb_features(pkt_dev->skb)));
+					pktgen_stop_device(pkt_dev);
+					goto out;
+				}
 			}
 			pkt_dev->force_new_skb = 0;
 			queue_map = pkt_dev->cur_queue_map;
@@ -4198,8 +4252,8 @@ static void pktgen_xmit(struct pktgen_dev *pkt_dev, u64 now)
 		if (pkt_dev->pgh && (pkt_dev->tx_blocked || !pkt_dev->last_ok)) {
 			timestamp_skb(pkt_dev, pkt_dev->pgh);
 
-			if (pkt_dev->flags & F_CSUM)
-				pg_do_csum(pkt_dev->skb);
+			if (pkt_dev->flags & F_UDPCSUM)
+				pg_do_csum(pkt_dev, pkt_dev->skb);
 		}
 	retry_now:
 		ret = netdev_start_xmit(pkt_dev->skb, odev, txq, --burst > 0);

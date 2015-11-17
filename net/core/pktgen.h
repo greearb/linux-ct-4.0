@@ -42,7 +42,7 @@
 #define F_NO_TIMESTAMP  (1<<17)	/* Don't timestamp packets (default TS) */
 
 #define F_PG_STOPPED  (1<<28)   /* Endpoint is stopped, report only */
-#define F_CSUM        (1<<29)   /* Use UDP checksums */
+#define F_TCP         (1<<29)   /* Send TCP packet instead of UDP */
 #define F_USE_REL_TS  (1<<30)	/* Use relative time-stamps, ie TSC or similar */
 #define F_PEER_LOCAL  (1<<31)	/* peer endpoint is local, allows some optimizations */
 
@@ -207,6 +207,7 @@ struct pktgen_dev {
 	__u32 cur_src_mac_offset;
 	__u32 cur_saddr;
 	__u32 cur_daddr;
+	__u32 tcp_seqno;
 	__u16 ip_id;
 	__u16 cur_udp_dst;
 	__u16 cur_udp_src;
