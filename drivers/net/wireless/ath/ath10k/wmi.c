@@ -1050,6 +1050,10 @@ static void ath10k_wmi_tx_beacons_iter(void *data, u8 *mac,
 				       struct ieee80211_vif *vif)
 {
 	struct ath10k_vif *arvif = ath10k_vif_to_arvif(vif);
+	BUG_ON(!vif);
+	BUG_ON(!arvif);
+	BUG_ON((unsigned long)(vif) < 0xFFF);
+	BUG_ON((unsigned long)(arvif) < 0xFFF);
 
 	ath10k_wmi_tx_beacon_nowait(arvif);
 }
