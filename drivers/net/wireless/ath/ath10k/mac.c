@@ -537,8 +537,11 @@ static int ath10k_peer_create(struct ath10k *ar, u32 vdev_id, const u8 *addr)
 
 	lockdep_assert_held(&ar->conf_mutex);
 
-	if (ar->num_peers >= ar->max_num_peers)
+	if (ar->num_peers >= ar->max_num_peers) {
+		ath10k_warn(ar, "peer-create failed, too many peers: %d  max-peers: %d\n",
+			    ar->num_peers, ar->max_num_peers);
 		return -ENOBUFS;
+	}
 
 	ret = ath10k_wmi_peer_create(ar, vdev_id, addr);
 	if (ret) {
