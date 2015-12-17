@@ -2781,14 +2781,25 @@ static int hwsim_cloned_frame_received_nl(struct sk_buff *skb_2,
 	void *frame_data;
 	struct sk_buff *skb = NULL;
 
-	if (info->snd_portid != wmediumd_portid)
+	if (info->snd_portid != wmediumd_portid) {
+		if (net_ratelimit())
+			printk(KERN_DEBUG " hwsim rx-nl: portid mismatch, snd_portid: %d  portid %d\n",
+			       info->snd_portid, wmediumd_portid);
 		return -EINVAL;
+	}
 
 	if (!info->attrs[HWSIM_ATTR_ADDR_RECEIVER] ||
 	    !info->attrs[HWSIM_ATTR_FRAME] ||
 	    !info->attrs[HWSIM_ATTR_RX_RATE] ||
-	    !info->attrs[HWSIM_ATTR_SIGNAL])
+	    !info->attrs[HWSIM_ATTR_SIGNAL]) {
+		if (net_ratelimit())
+			printk(KERN_DEBUG  "hwsim: Missing something: rxr: %d  frame: %d rate: %d sig: %d\n",
+			       !!info->attrs[HWSIM_ATTR_ADDR_RECEIVER],
+			       !!info->attrs[HWSIM_ATTR_FRAME],
+			       !!info->attrs[HWSIM_ATTR_RX_RATE],
+			       !!info->attrs[HWSIM_ATTR_SIGNAL]);
 		goto out;
+	}
 
 	dst = (void *)nla_data(info->attrs[HWSIM_ATTR_ADDR_RECEIVER]);
 	frame_data_len = nla_len(info->attrs[HWSIM_ATTR_FRAME]);
@@ -2796,23 +2807,39 @@ static int hwsim_cloned_frame_received_nl(struct sk_buff *skb_2,
 
 	/* Allocate new skb here */
 	skb = alloc_skb(frame_data_len, GFP_KERNEL);
-	if (skb == NULL)
-		goto err;
+	if (skb == NULL) {
+		if (net_ratelimit())
+			printk(KERN_DEBUG " hwsim rx-nl: skb alloc failed, len: %d\n",
+			       frame_data_len);
+		goto out;
+	}
 
-	if (frame_data_len > IEEE80211_MAX_DATA_LEN)
-		goto err;
+	if (frame_data_len > IEEE80211_MAX_DATA_LEN) {
+		if (net_ratelimit())
+			printk(KERN_DEBUG " hwsim rx-nl: data lenth error: %d  max: %d\n",
+			       frame_data_len, IEEE80211_MAX_DATA_LEN);
+		goto out;
+	}
 
 	/* Copy the data */
 	memcpy(skb_put(skb, frame_data_len), frame_data, frame_data_len);
 
 	data2 = get_hwsim_data_ref_from_addr(dst);
-	if (!data2)
+	if (!data2) {
+		if (net_ratelimit())
+			printk(KERN_DEBUG " hwsim rx-nl: Cannot find radio %pM\n",
+				dst);
 		goto out;
+	}
 
 	/* check if radio is configured properly */
 
-	if (data2->idle || !data2->started)
+	if (data2->idle || !data2->started) {
+		if (net_ratelimit())
+			printk(KERN_DEBUG " hwsim rx-nl: radio %pM idle: %d or not started: %d\n",
+			       dst, data2->idle, !data2->started);
 		goto out;
+	}
 
 	/* A frame is received from user space */
 	memset(&rx_status, 0, sizeof(rx_status));
@@ -2840,8 +2867,6 @@ static int hwsim_cloned_frame_received_nl(struct sk_buff *skb_2,
 	ieee80211_rx_irqsafe(data2->hw, skb);
 
 	return 0;
-err:
-	printk(KERN_DEBUG "mac80211_hwsim: error occurred in %s\n", __func__);
 out:
 	dev_kfree_skb(skb);
 	return -EINVAL;
