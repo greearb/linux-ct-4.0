@@ -1477,6 +1477,9 @@ void carl9170_op_tx(struct ieee80211_hw *hw,
 	if (unlikely(!IS_STARTED(ar)))
 		goto err_free;
 
+	if (unlikely(ar->pattern_mode))
+		goto err_free;
+
 	info = IEEE80211_SKB_CB(skb);
 	vif = info->control.vif;
 
