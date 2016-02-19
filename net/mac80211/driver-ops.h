@@ -12,6 +12,17 @@ static inline bool check_sdata_in_driver(struct ieee80211_sub_if_data *sdata)
 		     sdata->dev ? sdata->dev->name : sdata->name, sdata->flags);
 }
 
+static inline bool _check_sdata_in_driver(struct ieee80211_sub_if_data *sdata,
+					  bool can_warn)
+{
+	if (can_warn)
+		return !WARN(!(sdata->flags & IEEE80211_SDATA_IN_DRIVER),
+			     "%s:  Failed check-sdata-in-driver check, flags: 0x%x\n",
+			     sdata->dev ? sdata->dev->name : sdata->name, sdata->flags);
+
+	return (sdata->flags & IEEE80211_SDATA_IN_DRIVER);
+}
+
 static inline struct ieee80211_sub_if_data *
 get_bss_sdata(struct ieee80211_sub_if_data *sdata)
 {
@@ -208,6 +219,7 @@ static inline void drv_bss_info_changed(struct ieee80211_local *local,
 					struct ieee80211_bss_conf *info,
 					u32 changed)
 {
+	static int warn_once = true;
 	might_sleep();
 
 	if (WARN_ON_ONCE(changed & (BSS_CHANGED_BEACON |
@@ -222,8 +234,10 @@ static inline void drv_bss_info_changed(struct ieee80211_local *local,
 			 sdata->vif.type == NL80211_IFTYPE_MONITOR))
 		return;
 
-	if (!check_sdata_in_driver(sdata))
+	if (!_check_sdata_in_driver(sdata, warn_once)) {
+		warn_once = false;
 		return;
+	}
 
 	trace_drv_bss_info_changed(local, sdata, info, changed);
 	if (local->ops->bss_info_changed)
