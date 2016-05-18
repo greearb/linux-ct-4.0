@@ -3516,8 +3516,12 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	acked -= tp->packets_out;
 
 	/* Advance cwnd if state allows */
-	if (tcp_may_raise_cwnd(sk, flag))
-		tcp_cong_avoid(sk, ack, acked);
+	if (tcp_may_raise_cwnd(sk, flag)) {
+		int acked_sacked = prior_unsacked -
+				   (tp->packets_out - tp->sacked_out);
+
+		tcp_cong_avoid(sk, ack, max(acked, acked_sacked));
+	}
 
 	if (tcp_ack_is_dubious(sk, flag)) {
 		is_dupack = !(flag & (FLAG_SND_UNA_ADVANCED | FLAG_NOT_DUP));
