@@ -5001,6 +5001,7 @@ struct wmi_pdev_set_special_cmd {
 #define SET_SPECIAL_ID_STA_TXBW_MASK    8 /* Set the bandwidths that station vdevs can transmit on:
 					   * 0:  all, 0x1: 20Mhz, 0x2 40Mhz, 0x4 80Mhz
                                            */
+#define SET_SPECIAL_ID_PDEV_XRETRY_TH   9 /* Set the threshold for resetting phy due to failed retries, U16 */
 
 #define CT_CCA_TYPE_MIN0 0
 #define CT_CCA_TYPE_MIN1 1
