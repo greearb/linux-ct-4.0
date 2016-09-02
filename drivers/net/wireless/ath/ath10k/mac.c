@@ -562,20 +562,25 @@ static int ath10k_peer_create(struct ath10k *ar, u32 vdev_id, const u8 *addr)
 	return 0;
 }
 
+int ath10k_mac_set_pdev_kickout(struct ath10k *ar)
+{
+	u32 param = ar->wmi.pdev_param->sta_kickout_th;
+	int rv;
+
+	rv = ath10k_wmi_pdev_set_param(ar, param,
+				       ar->sta_xretry_kickout_thresh);
+	if (rv) {
+		ath10k_warn(ar, "failed to set sta kickout threshold to %d: %d\n",
+			    ar->sta_xretry_kickout_thresh, rv);
+	}
+	return rv;
+}
+
 static int ath10k_mac_set_kickout(struct ath10k_vif *arvif)
 {
 	struct ath10k *ar = arvif->ar;
 	u32 param;
 	int ret;
-
-	param = ar->wmi.pdev_param->sta_kickout_th;
-	ret = ath10k_wmi_pdev_set_param(ar, param,
-					ar->sta_xretry_kickout_thresh);
-	if (ret) {
-		ath10k_warn(ar, "failed to set kickout threshold on vdev %i: %d\n",
-			    arvif->vdev_id, ret);
-		return ret;
-	}
 
 	param = ar->wmi.vdev_param->ap_keepalive_min_idle_inactive_time_secs;
 	ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id, param,
@@ -4046,6 +4051,10 @@ static int ath10k_add_interface(struct ieee80211_hw *hw,
 			goto err_vdev_delete;
 		}
 	}
+
+	ret = ath10k_mac_set_pdev_kickout(ar);
+	if (ret)
+		return ret;
 
 	if (arvif->vdev_type == WMI_VDEV_TYPE_AP) {
 		ret = ath10k_peer_create(ar, arvif->vdev_id, vif->addr);
