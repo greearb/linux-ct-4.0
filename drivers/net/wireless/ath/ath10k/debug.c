@@ -24,6 +24,7 @@
 #include "debug.h"
 #include "hif.h"
 #include "wmi-ops.h"
+#include "mac.h"
 
 /* ms */
 #define ATH10K_DEBUG_HTT_STATS_INTERVAL 1000
@@ -2585,11 +2586,15 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 		ar->eeprom_overrides.rifs_enable_override = val;
 		ath10k_warn(ar, "Setting RIFS enable override to 0x%x\n", val);
 	}
-	/* Below here are local driver hacks, and not passed directly to firmware. */
+	/* Below here are local driver hacks, and not necessarily passed directly to firmware. */
 	else if (id == 0x1001) {
 		/* Set station failed-transmit kickout threshold. */
 		ar->sta_xretry_kickout_thresh = val;
-		ath10k_warn(ar, "Setting ar sta-xretry-kickout-thresh to 0x%x\n", val);
+
+		ath10k_warn(ar, "Setting pdev sta-xretry-kickout-thresh to 0x%x\n",
+			    val);
+
+		ath10k_mac_set_pdev_kickout(ar);
 		goto unlock;
 	}
 	/* else, pass it through to firmware...but will not be stored locally, so
