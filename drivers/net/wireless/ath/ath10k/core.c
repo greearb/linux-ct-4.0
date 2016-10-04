@@ -1332,6 +1332,9 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode)
 		if (ar->eeprom_overrides.rifs_enable_override)
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_RIFS_ENABLE,
 						    ar->eeprom_overrides.rifs_enable_override);
+		if (ar->eeprom_overrides.wmi_wd_keepalive_ms)
+			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_WMI_WD,
+						    ar->eeprom_overrides.wmi_wd_keepalive_ms);
 	}
 
 	if (ar->max_num_vdevs >= 64)
